@@ -1,0 +1,125 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+
+library(tidyverse)
+library(magrittr)
+library(dplyr)
+library(tidyr)
+library(readxl)
+library(stringr)
+library(MSstats)
+library(DEqMS)
+library(DEP)
+library(SummarizedExperiment)
+
+```
+
+## Undifferentiated
+
+### Supernatant
+
+```{r}
+
+data <- read.delim("data/TLR10/20240701_082307_ASC_SN_TLR10_Light_Report.tsv", 
+                   header = TRUE, sep = "\t", dec = ",", na.strings = c("NaN", "NA", ""))
+
+data.filtered <- data %>%
+  mutate(PG.ProteinNames = str_split_i(PG.ProteinNames, ";", 1),
+         PG.Genes = str_split_i(PG.Genes, ";", 1)) %>%
+  select(c(PG.ProteinGroups,
+           PG.Genes,
+           PG.ProteinNames,
+           PG.NrOfStrippedSequencesIdentified..Experiment.wide.,
+           ends_with("MS2Quantity"))) %>%
+  group_by(PG.Genes) %>%
+  summarise(PG.ProteinNames = dplyr::first(PG.ProteinNames),
+            PG.ProteinGroups = paste(PG.ProteinGroups, sep = ";", collapse = ""),
+            across(where(is.numeric), ~ sum(.))) %>%
+  ungroup() %>%
+  mutate(PG.Genes = coalesce(PG.Genes, PG.ProteinNames)) %>%
+  set_colnames(c("Gene.Name", "Protein.Name", "Protein.Groups", "Peptides",
+                 colnames(.)[5:ncol(.)] %>% 
+                   str_remove("X\\.\\d+\\.\\.") %>% 
+                   str_remove("\\.raw\\.PG\\.MS2Quantity") %>%
+                   str_replace("_WO_", "_Dark_"))) %>%
+  column_to_rownames("Gene.Name")
+
+samples <- colnames(data.filtered)[4:ncol(data.filtered)] %>% 
+  tibble(Sample.Name = .) %>% 
+  separate_wider_regex(Sample.Name, c(Cell.Type = ".*", 
+                                      "_[:alpha:]*_", 
+                                      Condition = "[:alpha:]*", 
+                                      "_", 
+                                      Replicate = "\\d"),
+                       cols_remove = FALSE) %>%
+  column_to_rownames("Sample.Name")
+  
+
+quant_data <- data.filtered %>% 
+  select(c(4:ncol(data.filtered))) %>% 
+  as.matrix()
+
+ds <- SummarizedExperiment(assays = List(RawIntensity = quant_data),
+                           rowData = data.filtered[1:3],
+                           colData = samples)
+
+assays(ds)$Log2Intensity <- assays(ds)$RawIntensity %>% log2
+
+
+
+
+
+
+
+
+ggplot(quant_data.log %>% pivot_longer(everything(), 
+                                       names_to = "Sample", 
+                                       values_to = "Log.Intensity",
+                                       values_drop_na = TRUE), 
+       aes(x = Sample, y = Log.Intensity)) +
+  geom_boxplot()
+
+quant_data.log.norm <- quant_data.log %>%
+  mutate(across(everything(), ~ .x - median(na.omit(.x))))
+
+ggplot(quant_data.log.norm %>% pivot_longer(everything(), 
+                                       names_to = "Sample", 
+                                       values_to = "Log.Intensity",
+                                       values_drop_na = TRUE), 
+       aes(x = Sample, y = Log.Intensity)) +
+  geom_boxplot()
+
+```
+
+```{r}
+
+missing_values <- quant_data %>% mutate(na_vals = rowSums(is.na(.)))
+
+ggplot(missing_values, aes(x = na_vals)) + 
+  geom_bar(stat = "count") +
+  scale_x_continuous(breaks = seq(1, 12, by = 1)) +
+  scale_y_log10()
+
+```
+
+```{r}
+
+keep <- quant_data %>% 
+  pivot_longer(!Gene.Name, names_to = "Sample.Name", values_to = "Intensity") %>%
+  mutate(across(!c(Gene.Name, Sample.Name), ~ !is.na(.x))) %>%
+  mutate(Sample.Name = str_remove(Sample.Name, "_\\d+$")) %>%
+  group_by(Gene.Name, Sample.Name) %>%
+  summarise(Group.Count = sum(Intensity), .groups = "drop") %>%
+  ungroup() %>%
+  pivot_wider(names_from = Sample.Name, values_from = Group.Count) %>%
+  column_to_rownames("Gene.Name") %>%
+  filter(if_any(everything(), ~ . == 3)) %>%
+  rownames()
+  
+
+```
+
