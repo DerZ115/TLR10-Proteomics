@@ -1,0 +1,28 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+
+library(tidyverse)
+library(dplyr)
+library(readxl)
+library(stringr)
+
+```
+
+## Undifferentiated
+
+### Supernatant
+
+```{r}
+
+data <- read_xlsx("./data/raw/ASC_SN_TLR10_Light_Report.xlsx", sheet = 1) %>%
+  mutate(PG.Genes = str_split_i(PG.Genes, ";", 1))
+
+quant_data <- data %>% select(7:18) 
+
+```
+
+
