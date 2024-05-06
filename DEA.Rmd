@@ -18,10 +18,20 @@ library(stringr)
 
 ```{r}
 
-data <- read_xlsx("./data/raw/ASC_SN_TLR10_Light_Report.xlsx", sheet = 1) %>%
-  mutate(PG.Genes = str_split_i(PG.Genes, ";", 1))
+data <- read_xlsx("./data/raw/ASC_SN_TLR10_Light_Report.xlsx", sheet = 1, na = c("NA", "NaN")) %>%
+  mutate(across(7:30, ~replace_na(.x, 0)))
+
+data.filtered <- data %>%
+  mutate(First.Protein = str_split_i(PG.ProteinGroups, ";", 1),
+         First.Gene = str_split_i(PG.Genes, ";", 1))
 
 quant_data <- data %>% select(7:18) 
+
+row.names(quant_data) <- data
+
+dupes.genes <- data.filtered[duplicated(data.filtered$First.Gene) | duplicated(data.filtered$First.Gene, fromLast = T),]
+
+dupes.proteins <- data.filtered[duplicated(data.filtered$First.Protein) | duplicated(data.filtered$First.Protein, fromLast = T),]
 
 ```
 

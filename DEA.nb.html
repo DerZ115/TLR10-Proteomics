@@ -1754,22 +1754,28 @@ display: none;
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShkcGx5cilcblxuYGBgIn0= -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuXG5saWJyYXJ5KHRpZHl2ZXJzZSlcbmBgYCJ9 -->
+<pre class="r"><code>
+library(tidyverse)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoi4pSA4pSAIEF0dGFjaGluZyBjb3JlIHRpZHl2ZXJzZSBwYWNrYWdlcyDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAgdGlkeXZlcnNlIDIuMC4wIOKUgOKUgFxu4pyUIGRwbHlyICAgICAxLjEuNCAgICAg4pyUIHJlYWRyICAgICAyLjEuNVxu4pyUIGZvcmNhdHMgICAxLjAuMCAgICAg4pyUIHN0cmluZ3IgICAxLjUuMVxu4pyUIGdncGxvdDIgICAzLjUuMCAgICAg4pyUIHRpYmJsZSAgICAzLjIuMVxu4pyUIGx1YnJpZGF0ZSAxLjkuMyAgICAg4pyUIHRpZHlyICAgICAxLjMuMVxu4pyUIHB1cnJyICAgICAxLjAuMiAgICAgXG7ilIDilIAgQ29uZmxpY3RzIOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgCB0aWR5dmVyc2VfY29uZmxpY3RzKCkg4pSA4pSAXG7inJYgZHBseXI6OmZpbHRlcigpIG1hc2tzIHN0YXRzOjpmaWx0ZXIoKVxu4pyWIGRwbHlyOjpsYWcoKSAgICBtYXNrcyBzdGF0czo6bGFnKClcbuKEuSBVc2UgdGhlIFx1MDAxYl04OztodHRwOi8vY29uZmxpY3RlZC5yLWxpYi5vcmcvXHUwMDA3Y29uZmxpY3RlZCBwYWNrYWdlXHUwMDFiXTg7O1x1MDAwNyB0byBmb3JjZSBhbGwgY29uZmxpY3RzIHRvIGJlY29tZSBlcnJvcnNcbiJ9 -->
+<pre><code>── Attaching core tidyverse packages ─────────────────────────────────────────────────────────────────────────────────────────────────────────── tidyverse 2.0.0 ──
+✔ dplyr     1.1.4     ✔ readr     2.1.5
+✔ forcats   1.0.0     ✔ stringr   1.5.1
+✔ ggplot2   3.5.0     ✔ tibble    3.2.1
+✔ lubridate 1.9.3     ✔ tidyr     1.3.1
+✔ purrr     1.0.2     
+── Conflicts ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── tidyverse_conflicts() ──
+✖ dplyr::filter() masks stats::filter()
+✖ dplyr::lag()    masks stats::lag()
+ℹ Use the ]8;;http://conflicted.r-lib.org/conflicted package]8;; to force all conflicts to become errors</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShkcGx5cilcbmxpYnJhcnkocmVhZHhsKVxubGlicmFyeShzdHJpbmdyKVxuXG5gYGAifQ== -->
 <pre class="r"><code>library(dplyr)
+library(readxl)
+library(stringr)
 </code></pre>
 <!-- rnb-source-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiXG5BdHRhY2hpbmcgcGFja2FnZTog4oCYZHBseXLigJlcblxuVGhlIGZvbGxvd2luZyBvYmplY3RzIGFyZSBtYXNrZWQgZnJvbSDigJhwYWNrYWdlOnN0YXRz4oCZOlxuXG4gICAgZmlsdGVyLCBsYWdcblxuVGhlIGZvbGxvd2luZyBvYmplY3RzIGFyZSBtYXNrZWQgZnJvbSDigJhwYWNrYWdlOmJhc2XigJk6XG5cbiAgICBpbnRlcnNlY3QsIHNldGRpZmYsIHNldGVxdWFsLCB1bmlvblxuIn0= -->
-<pre><code>
-Attaching package: ‘dplyr’
-
-The following objects are masked from ‘package:stats’:
-
-    filter, lag
-
-The following objects are masked from ‘package:base’:
-
-    intersect, setdiff, setequal, union</code></pre>
-<!-- rnb-output-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 <div id="undifferentiated" class="section level2">
@@ -1778,12 +1784,17 @@ The following objects are masked from ‘package:base’:
 <h3>Supernatant</h3>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubmFtZXMoZGF0YSkgPC0gbGlzdC5maWxlcyhcIi4vZGF0YS9yYXcvXCIpICU+JSBzdHJfcmVtb3ZlKFwiKF9MaWdodCk/X1JlcG9ydFxcLnhsc3gkXCIpXG5cbmBgYCJ9 -->
-<pre class="r"><code>names(data) &lt;- list.files(&quot;./data/raw/&quot;) %&gt;% str_remove(&quot;(_Light)?_Report\.xlsx$&quot;)
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZGF0YS5maWx0ZXJlZCA8LSBkYXRhICU+JVxuICBtdXRhdGUoRmlyc3QuUHJvdGVpbiA9IHN0cl9zcGxpdF9pKFBHLlByb3RlaW5Hcm91cHMsIFwiO1wiLCAxKSxcbiAgICAgICAgIEZpcnN0LkdlbmUgPSBzdHJfc3BsaXRfaShQRy5HZW5lcywgXCI7XCIsIDEpKSAlPiVcblxucXVhbnRfZGF0YSA8LSBkYXRhICU+JSBzZWxlY3QoNzoxOCkgXG5cbmBgYCJ9 -->
+<pre class="r"><code>data.filtered &lt;- data %&gt;%
+  mutate(First.Protein = str_split_i(PG.ProteinGroups, &quot;;&quot;, 1),
+         First.Gene = str_split_i(PG.Genes, &quot;;&quot;, 1)) %&gt;%
+
+quant_data &lt;- data %&gt;% select(7:18) 
 </code></pre>
 <!-- rnb-source-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiRXJyb3I6ICdcXC4nIGlzIGFuIHVucmVjb2duaXplZCBlc2NhcGUgaW4gY2hhcmFjdGVyIHN0cmluZyAoPGlucHV0PjoxOjc1KVxuIn0= -->
-<pre><code>Error: &#39;\.&#39; is an unrecognized escape in character string (&lt;input&gt;:1:75)</code></pre>
+<!-- rnb-output-begin eyJkYXRhIjoiRXJyb3IgaW4gZGF0YSAlPiUgbXV0YXRlKEZpcnN0LlByb3RlaW4gPSBzdHJfc3BsaXRfaShQRy5Qcm90ZWluR3JvdXBzLCAgOiBcbiAgY291bGQgbm90IGZpbmQgZnVuY3Rpb24gXCIlPiU8LVwiXG4ifQ== -->
+<pre><code>Error in data %&gt;% mutate(First.Protein = str_split_i(PG.ProteinGroups,  : 
+  could not find function &quot;%&gt;%&lt;-&quot;</code></pre>
 <!-- rnb-output-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
@@ -1791,7 +1802,7 @@ The following objects are masked from ‘package:base’:
 </div>
 </div>
 
-<div id="rmd-source-code">LS0tDQp0aXRsZTogIlIgTm90ZWJvb2siDQpvdXRwdXQ6IGh0bWxfbm90ZWJvb2sNCi0tLQ0KDQpgYGB7cn0NCg0KbGlicmFyeSh0aWR5dmVyc2UpDQpsaWJyYXJ5KGRwbHlyKQ0KbGlicmFyeShyZWFkeGwpDQpsaWJyYXJ5KHN0cmluZ3IpDQoNCmBgYA0KDQojIyBVbmRpZmZlcmVudGlhdGVkDQoNCiMjIyBTdXBlcm5hdGFudA0KDQpgYGB7cn0NCg0KZGF0YSA8LSByZWFkX3hsc3goIi4vZGF0YS9yYXcvQVNDX1NOX1RMUjEwX0xpZ2h0X1JlcG9ydC54bHN4Iiwgc2hlZXQgPSAxKSAlPiUNCiAgbXV0YXRlKFBHLkdlbmVzID0gc3RyX3NwbGl0X2koUEcuR2VuZXMsICI7IiwgMSkpDQoNCnF1YW50X2RhdGEgPC0gZGF0YSAlPiUgc2VsZWN0KDc6MTgpIA0KDQpgYGANCg0KDQo=</div>
+<div id="rmd-source-code">LS0tDQp0aXRsZTogIlIgTm90ZWJvb2siDQpvdXRwdXQ6IGh0bWxfbm90ZWJvb2sNCi0tLQ0KDQpgYGB7cn0NCg0KbGlicmFyeSh0aWR5dmVyc2UpDQpsaWJyYXJ5KGRwbHlyKQ0KbGlicmFyeShyZWFkeGwpDQpsaWJyYXJ5KHN0cmluZ3IpDQoNCmBgYA0KDQojIyBVbmRpZmZlcmVudGlhdGVkDQoNCiMjIyBTdXBlcm5hdGFudA0KDQpgYGB7cn0NCg0KZGF0YSA8LSByZWFkX3hsc3goIi4vZGF0YS9yYXcvQVNDX1NOX1RMUjEwX0xpZ2h0X1JlcG9ydC54bHN4Iiwgc2hlZXQgPSAxLCBuYSA9IGMoIk5BIiwgIk5hTiIpKSAlPiUNCiAgbXV0YXRlKGFjcm9zcyg3OjMwLCB+cmVwbGFjZV9uYSgueCwgMCkpKQ0KDQpkYXRhLmZpbHRlcmVkIDwtIGRhdGEgJT4lDQogIG11dGF0ZShGaXJzdC5Qcm90ZWluID0gc3RyX3NwbGl0X2koUEcuUHJvdGVpbkdyb3VwcywgIjsiLCAxKSwNCiAgICAgICAgIEZpcnN0LkdlbmUgPSBzdHJfc3BsaXRfaShQRy5HZW5lcywgIjsiLCAxKSkNCg0KcXVhbnRfZGF0YSA8LSBkYXRhICU+JSBzZWxlY3QoNzoxOCkgDQoNCnJvdy5uYW1lcyhxdWFudF9kYXRhKSA8LSBkYXRhDQoNCmR1cGVzLmdlbmVzIDwtIGRhdGEuZmlsdGVyZWRbZHVwbGljYXRlZChkYXRhLmZpbHRlcmVkJEZpcnN0LkdlbmUpIHwgZHVwbGljYXRlZChkYXRhLmZpbHRlcmVkJEZpcnN0LkdlbmUsIGZyb21MYXN0ID0gVCksXQ0KDQpkdXBlcy5wcm90ZWlucyA8LSBkYXRhLmZpbHRlcmVkW2R1cGxpY2F0ZWQoZGF0YS5maWx0ZXJlZCRGaXJzdC5Qcm90ZWluKSB8IGR1cGxpY2F0ZWQoZGF0YS5maWx0ZXJlZCRGaXJzdC5Qcm90ZWluLCBmcm9tTGFzdCA9IFQpLF0NCg0KYGBgDQoNCg0K</div>
 
 
 
