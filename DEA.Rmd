@@ -23,9 +23,9 @@ library(SummarizedExperiment)
 ### Supernatant
 
 ```{r}
-
 data <- read.delim("data/raw_new/ASC_SN_TLR10_Light_Report.tsv", 
-                   header = TRUE, sep = "\t", dec = ",", na.strings = c("NaN", "NA", ""))
+                   header = TRUE, sep = "\t", dec = ",", na.strings = c("NaN", "NA", "")) %>%
+  as_tibble()
 
 data.filtered <- data %>%
   mutate(PG.ProteinNames = str_split_i(PG.ProteinNames, ";", 1),
@@ -45,29 +45,45 @@ data.filtered <- data %>%
                  colnames(.)[5:ncol(.)] %>% 
                    str_remove("X\\.\\d+\\.\\.") %>% 
                    str_remove("\\.raw\\.PG\\.MS2Quantity") %>%
-                   str_replace("_WO_", "_Dark_"))) %>%
-  column_to_rownames("Gene.Name")
+                   str_replace("_WO_", "_Dark_")))
 
-samples <- colnames(data.filtered)[4:ncol(data.filtered)] %>% 
+quant_data <- data.filtered %>% 
+  select(c(Gene.Name, matches("^(?:ADIPO_|OSTEO_)?ASC_(?:WT|TLR10_LOV)_(?:SN|WCL)_(?:Dark|Light)_\\d$")))
+
+samples <- colnames(quant_data)[2:ncol(quant_data)] %>% 
   tibble(Sample.Name = .) %>% 
   separate_wider_regex(Sample.Name, c(Cell.Type = ".*", 
                                       "_[:alpha:]*_", 
                                       Condition = "[:alpha:]*", 
                                       "_", 
                                       Replicate = "\\d"),
-                       cols_remove = FALSE) %>%
-  column_to_rownames("Sample.Name")
-  
+                       cols_remove = FALSE)
 
-quant_data <- data.filtered %>% 
-  select(c(4:ncol(data.filtered))) %>% 
-  as.matrix()
+```
+
+
+```{r}
+
+keep <- quant_data %>% 
+  pivot_longer(!Gene.Name, names_to = "Sample.Name") %>%
+  mutate(value = !is.na(value), Sample.Name = str_remove(Sample.Name, "_\\d+$")) %>%
+  group_by(Gene.Name, Sample.Name) %>%
+  summarise(Group.Count = sum(value), .groups = "drop") %>%
+  ungroup() %>%
+  pivot_wider(names_from = Sample.Name, values_from = Group.Count) %>%
+  filter(if_any(everything(), ~ . == 3)) %>%
+  pull(Gene.Name)
+
+```
+
+
+```{r}
 
 ds <- SummarizedExperiment(assays = List(RawIntensity = quant_data),
                            rowData = data.filtered[1:3],
                            colData = samples)
 
-assays(ds)$Log2Intensity <- assays(ds)$RawIntensity %>% log2
+quant_data.log <- quant_data %>% mutate(across(!Gene.Name, log2))
 
 
 
