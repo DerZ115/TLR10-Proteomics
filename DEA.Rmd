@@ -18,6 +18,7 @@ library(SummarizedExperiment)
 library(pheatmap)
 library(ComplexHeatmap)
 library(envalysis)
+library(qvalue)
 
 ```
 
@@ -39,9 +40,10 @@ data <- read.delim("data/raw_new/ASC_SN_TLR10_Light_Report.tsv",
   group_by(PG.Genes) %>%
   summarise(PG.ProteinNames = dplyr::first(PG.ProteinNames),
             PG.ProteinGroups = paste(PG.ProteinGroups, sep = ";", collapse = ""),
-            across(where(is.numeric), ~ sum(.))) %>%
+            across(where(is.numeric), ~ sum(., na.rm = TRUE))) %>%
   ungroup() %>%
-  mutate(PG.Genes = coalesce(PG.Genes, PG.ProteinNames)) %>%
+  mutate(PG.Genes = coalesce(PG.Genes, PG.ProteinNames),
+         across(where(is.numeric), ~ na_if(., 0))) %>%
   set_colnames(c("Gene.Name", "Protein.Name", "Protein.Groups", "Peptides",
                  colnames(.)[5:ncol(.)] %>% 
                    str_remove("X\\.\\d+\\.\\.") %>% 
@@ -49,7 +51,7 @@ data <- read.delim("data/raw_new/ASC_SN_TLR10_Light_Report.tsv",
                    str_replace("_WO_", "_Dark_")))
 
 quant_data <- data %>% 
-  select(c(Gene.Name, matches("^(?:ADIPO_|OSTEO_)?ASC_(?:WT|TLR10_LOV)_(?:SN|WCL)_(?:Dark|Light)_\\d$")))
+   select(c(Gene.Name, matches("^(?:ADIPO_|OSTEO_)?ASC_(?:WT|TLR10_LOV)_(?:SN|WCL)_(?:Dark|Light)_\\d$")))
 
 annotation_data <- data %>%
   select(c(Gene.Name, Protein.Name, Protein.Groups, Peptides))
@@ -61,7 +63,9 @@ samples <- colnames(quant_data)[2:ncol(quant_data)] %>%
                                       Condition = "[:alpha:]*", 
                                       "_", 
                                       Replicate = "\\d"),
-                       cols_remove = FALSE)
+                       cols_remove = FALSE) %>%
+  mutate(Cell.Type = factor(Cell.Type, c("ASC_WT", "ASC_TLR10_LOV")),
+         Condition = factor(Condition, c("Dark", "Light")))
 
 ```
 
@@ -73,7 +77,8 @@ missing_values <- quant_data %>%
 ggplot(missing_values %>% dplyr::count(na_vals), aes(x = na_vals, y = n)) + 
   geom_bar(stat = "identity") +
   geom_text(aes(label = n), vjust=-0.3) +
-  scale_x_continuous(breaks = seq(0, 11, by = 1))
+  scale_x_continuous(breaks = seq(0, 11, by = 1)) +
+  labs(x = "# Missing", y = "Count")
 
 ```
 
@@ -92,6 +97,10 @@ keep <- quant_data %>%
 quant_data.filtered <- quant_data %>%
   filter(Gene.Name %in% keep)
 
+quant_matrix <- quant_data.filtered %>%
+  column_to_rownames("Gene.Name") %>%
+  as.matrix()
+
 annotation_data.filtered <- annotation_data %>%
   filter(Gene.Name %in% keep)
 
@@ -106,7 +115,47 @@ missing_values <- quant_data.filtered %>%
 ggplot(missing_values %>% dplyr::count(na_vals), aes(x = na_vals, y = n)) + 
   geom_bar(stat = "identity") +
   geom_text(aes(label = n), vjust=-0.3) +
-  scale_x_continuous(breaks = seq(0, 12, by = 1))
+  scale_x_continuous(breaks = seq(0, 12, by = 1)) +
+  labs(x = "# Missing", y = "Count")
+
+```
+
+```{r}
+
+quant_matrix.log <- quant_matrix %>% 
+  log2()
+
+quant_data.log <- quant_matrix.log %>% 
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+vsn::meanSdPlot(quant_matrix.log)
+
+ggplot(quant_data.log %>% pivot_longer(!Gene.Name, 
+                                       names_to = "Sample", 
+                                       values_to = "Log.Intensity",
+                                       values_drop_na = TRUE), 
+       aes(x = Sample, y = Log.Intensity)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+
+quant_matrix.log.norm <- quant_matrix %>%
+  normalize_matrix("vsn")
+
+vsn::meanSdPlot(quant_matrix.log.norm)
+
+quant_data.log.norm <- quant_matrix.log.norm %>% 
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+ggplot(quant_data.log.norm %>% pivot_longer(!Gene.Name, 
+                                       names_to = "Sample", 
+                                       values_to = "Log.Intensity",
+                                       values_drop_na = TRUE), 
+       aes(x = Sample, y = Log.Intensity)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1), 
+        plot.margin = unit(c(5.5, 5.5, 5.5, 40), "points"))
 
 ```
 
@@ -127,6 +176,9 @@ names(MNAR) <- quant_data.filtered$Gene.Name
 ```
 
 ```{r}
+
+missing_values <- quant_data.log.norm %>% 
+  mutate(na_vals = rowSums(is.na(.)))
 
 missing_values_hm <- missing_values %>%
   filter(na_vals > 0) %>%
@@ -159,19 +211,18 @@ Heatmap(missing_values_hm, col = c("black", "lightgray"),  name = "Missing Value
 ```{r}
 missing_values_density <- missing_values %>% 
   mutate(na_vals = na_vals > 0) %>%
-  pivot_longer(!c(Gene.Name, na_vals), names_to = "Sample.Name") %>%
-  mutate(Log2Intensity = log2(value)) %>%
+  pivot_longer(!c(Gene.Name, na_vals), names_to = "Sample.Name", values_to = "Intensity") %>%
   na.omit()
 
-ggplot(missing_values_density, aes(x = Log2Intensity, colour = na_vals)) +
+ggplot(missing_values_density, aes(x = Intensity, colour = na_vals)) +
   geom_density() +
-  labs(y = "Density", color = "Has missing values") + 
+  labs(x = "Log2Intensity", y = "Density", color = "Has missing values") + 
   scale_color_discrete(labels = c("No", "Yes")) +
   theme_publish()
 
-ggplot(missing_values_density, aes(x = Log2Intensity, colour = na_vals)) +
+ggplot(missing_values_density, aes(x = Intensity, colour = na_vals)) +
   stat_ecdf() +
-  labs(y = "Cumulative Fraction", color = "Has missing values") + 
+  labs(x = "Log2Intensity", y = "Cumulative Fraction", color = "Has missing values") + 
   scale_color_discrete(labels = c("No", "Yes")) +
   theme_publish()
 
@@ -180,12 +231,11 @@ ggplot(missing_values_density, aes(x = Log2Intensity, colour = na_vals)) +
 
 ```{r}
 
-quant_matrix <- quant_data.filtered %>%
-  column_to_rownames("Gene.Name") %>%
-  as.matrix()
-  
+quant_matrix.impute <- MsCoreUtils::impute_mixed(quant_matrix.log.norm, !MNAR, "MLE", "min")
 
-quant_matrix.impute <- MsCoreUtils::impute_mixed(quant_matrix, !MNAR, "knn", "MinDet")
+quant_data.impute <- quant_matrix.impute %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
   
 ```
 
@@ -195,64 +245,23 @@ imputed_plot <- quant_matrix.impute %>%
   as.data.frame() %>%
   rownames_to_column("Gene.Name") %>%
   pivot_longer(!Gene.Name, names_to = "Sample.Name", values_to = "Intensity") %>%
-  left_join(samples, by = "Sample.Name") %>%
-  mutate(Log2Intensity = log2(Intensity))
+  left_join(samples, by = "Sample.Name")
 
-ggplot(left_join(missing_values_density, samples, by = "Sample.Name"), aes(x = Log2Intensity, color = interaction(Cell.Type, Condition, sep = ":"))) +
+ggplot(left_join(missing_values_density, samples, by = "Sample.Name"), aes(x = Intensity, color = interaction(Cell.Type, Condition, sep = ":"))) +
   geom_density() +
-  labs(y = "Density", color = "Celltype:Condition") + 
+  labs(x = "Log2Intensity", y = "Density", color = "Celltype:Condition") + 
   theme_publish()
 
-ggplot(imputed_plot, aes(x = Log2Intensity, color = interaction(Cell.Type, Condition, sep = ":"))) +
+ggplot(imputed_plot, aes(x = Intensity, color = interaction(Cell.Type, Condition, sep = ":"))) +
   geom_density() +
   labs(y = "Density", color = "Celltype:Condition") + 
   theme_publish()
 
 ```
 
-
 ```{r}
 
-quant_matrix.log <- quant_matrix.impute %>% 
-  log2()
-
-quant_data.log <- quant_matrix.log %>% 
-  as.data.frame() %>%
-  rownames_to_column("Gene.Name")
-
-vsn::meanSdPlot(quant_matrix.log)
-
-ggplot(quant_data.log %>% pivot_longer(!Gene.Name, 
-                                       names_to = "Sample", 
-                                       values_to = "Log.Intensity",
-                                       values_drop_na = TRUE), 
-       aes(x = Sample, y = Log.Intensity)) +
-  geom_boxplot() +
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
-
-quant_matrix.log.norm <- quant_matrix.log %>%
-  normalize_matrix("vsn")
-
-vsn::meanSdPlot(quant_matrix.log.norm)
-
-quant_data.log.norm <- quant_matrix.log.norm %>% 
-  as.data.frame() %>%
-  rownames_to_column("Gene.Name")
-
-ggplot(quant_data.log.norm %>% pivot_longer(!Gene.Name, 
-                                       names_to = "Sample", 
-                                       values_to = "Log.Intensity",
-                                       values_drop_na = TRUE), 
-       aes(x = Sample, y = Log.Intensity)) +
-  geom_boxplot() +
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1), 
-        plot.margin = unit(c(5.5, 5.5, 5.5, 40), "points"))
-
-```
-
-```{r}
-
-quant_data.pca <- quant_data.log.norm %>%
+quant_data.pca <- quant_data.impute %>%
   column_to_rownames("Gene.Name") %>%
   t() %>%
   prcomp() %$% x %>%
@@ -265,35 +274,46 @@ ggplot(quant_data.pca, aes(x = PC1, y = PC2, color = interaction(Cell.Type, Cond
   ggrepel::geom_text_repel(aes(label = Sample.Name), size=2.5)
 
 
-quant_data.pca.no_outlier <- quant_data.log.norm %>%
-  select(!c(ASC_TLR10_LOV_SN_Dark_2, ASC_TLR10_LOV_SN_Light_3)) %>%
-  column_to_rownames("Gene.Name") %>%
-  t() %>%
-  prcomp() %$% x %>%
-  as.data.frame() %>%
-  rownames_to_column("Sample.Name") %>%
-  left_join(samples, by = "Sample.Name")
-  
-ggplot(quant_data.pca.no_outlier, aes(x = PC1, y = PC2, color = interaction(Cell.Type, Condition, sep = ":"))) +
-  geom_point() +
-  ggrepel::geom_text_repel(aes(label = Sample.Name), size=2.5)
+```
+
+```{r}
+
+samples <- samples %>% mutate(class = factor(paste(Cell.Type, Condition, sep = "."),
+                                   levels = c("ASC_WT.Dark", "ASC_WT.Light",
+                                              "ASC_TLR10_LOV.Dark", "ASC_TLR10_LOV.Light")))
+
+DE_design <- model.matrix(~ 0 + samples$class)
+colnames(DE_design) <- levels(samples$class)
+
+fit1 <- lmFit(quant_matrix.impute, design = DE_design)
+cont_matrix <- makeContrasts(LightVsDarkInWT = ASC_WT.Light - ASC_WT.Dark,
+                             LightVsDarkInTLR10 = ASC_TLR10_LOV.Light - ASC_TLR10_LOV.Dark,
+                             TLR10VsWTInDark = ASC_TLR10_LOV.Dark - ASC_WT.Dark,
+                             TLR10VsWTInLight = ASC_TLR10_LOV.Light - ASC_WT.Light,
+                             Diff = (ASC_TLR10_LOV.Light - ASC_TLR10_LOV.Dark) - (ASC_WT.Light - ASC_WT.Dark),
+                             levels = DE_design)
+fit2 <- contrasts.fit(fit1, contrasts = cont_matrix)
+fit3 <- eBayes(fit2, trend = TRUE, robust = TRUE)
+fit3$count <- annotation_data.filtered[annotation_data.filtered$Gene.Name == rownames(fit3$coefficients),]$Peptides
+fit4 <- spectraCounteBayes(fit3)
+
+VarianceBoxplot(fit4)
 
 ```
 
 ```{r}
 
-keep <- quant_data %>% 
-  pivot_longer(!Gene.Name, names_to = "Sample.Name", values_to = "Intensity") %>%
-  mutate(across(!c(Gene.Name, Sample.Name), ~ !is.na(.x))) %>%
-  mutate(Sample.Name = str_remove(Sample.Name, "_\\d+$")) %>%
-  group_by(Gene.Name, Sample.Name) %>%
-  summarise(Group.Count = sum(Intensity), .groups = "drop") %>%
-  ungroup() %>%
-  pivot_wider(names_from = Sample.Name, values_from = Group.Count) %>%
-  column_to_rownames("Gene.Name") %>%
-  filter(if_any(everything(), ~ . == 3)) %>%
-  rownames()
-  
+current_contrast <- 1
+DEqMS_res <- outputResult(fit4, coef_col = 1)
+DEqMS_res_q <- DEqMS_res %>% mutate(qval = qvalue(P.Value)$qvalue)
 
 ```
+
+```{r}
+
+topTable(fit3, coef = 1, number = Inf)
+
+```
+
+
 
