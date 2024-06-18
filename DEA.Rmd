@@ -14,13 +14,21 @@ library(stringr)
 library(MSstats)
 library(MsCoreUtils)
 library(DEqMS)
+library(ROTS)
 library(SummarizedExperiment)
 library(pheatmap)
 library(ComplexHeatmap)
 library(envalysis)
-library(qvalue)
+library(RColorBrewer)
 
 ```
+
+```{r}
+dir.create("results/DEA", showWarnings = F, recursive = T)
+
+knitr::opts_chunk$set(fig.width = 10, dpi = 300, results = "hold", fig.show = "hold")
+```
+
 
 ## Undifferentiated
 
@@ -36,7 +44,7 @@ data <- read.delim("data/raw_new/ASC_SN_TLR10_Light_Report.tsv",
            PG.Genes,
            PG.ProteinNames,
            PG.NrOfStrippedSequencesIdentified..Experiment.wide.,
-           ends_with("MS2Quantity"))) %>%
+           ends_with("Log2Quantity"))) %>%
   group_by(PG.Genes) %>%
   summarise(PG.ProteinNames = dplyr::first(PG.ProteinNames),
             PG.ProteinGroups = paste(PG.ProteinGroups, sep = ";", collapse = ""),
@@ -47,7 +55,7 @@ data <- read.delim("data/raw_new/ASC_SN_TLR10_Light_Report.tsv",
   set_colnames(c("Gene.Name", "Protein.Name", "Protein.Groups", "Peptides",
                  colnames(.)[5:ncol(.)] %>% 
                    str_remove("X\\.\\d+\\.\\.") %>% 
-                   str_remove("\\.raw\\.PG\\.MS2Quantity") %>%
+                   str_remove("\\.raw\\.PG\\.Log2Quantity") %>%
                    str_replace("_WO_", "_Dark_")))
 
 quant_data <- data %>% 
@@ -97,12 +105,12 @@ keep <- quant_data %>%
 quant_data.filtered <- quant_data %>%
   filter(Gene.Name %in% keep)
 
-quant_matrix <- quant_data.filtered %>%
+quant_matrix.filtered <- quant_data.filtered %>%
   column_to_rownames("Gene.Name") %>%
   as.matrix()
 
 annotation_data.filtered <- annotation_data %>%
-  filter(Gene.Name %in% keep)
+  filter(Gene.Name %in% quant_data.filtered$Gene.Name)
 
 ```
 
@@ -122,33 +130,7 @@ ggplot(missing_values %>% dplyr::count(na_vals), aes(x = na_vals, y = n)) +
 
 ```{r}
 
-quant_matrix.log <- quant_matrix %>% 
-  log2()
-
-quant_data.log <- quant_matrix.log %>% 
-  as.data.frame() %>%
-  rownames_to_column("Gene.Name")
-
-vsn::meanSdPlot(quant_matrix.log)
-
-ggplot(quant_data.log %>% pivot_longer(!Gene.Name, 
-                                       names_to = "Sample", 
-                                       values_to = "Log.Intensity",
-                                       values_drop_na = TRUE), 
-       aes(x = Sample, y = Log.Intensity)) +
-  geom_boxplot() +
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
-
-quant_matrix.log.norm <- quant_matrix %>%
-  normalize_matrix("vsn")
-
-vsn::meanSdPlot(quant_matrix.log.norm)
-
-quant_data.log.norm <- quant_matrix.log.norm %>% 
-  as.data.frame() %>%
-  rownames_to_column("Gene.Name")
-
-ggplot(quant_data.log.norm %>% pivot_longer(!Gene.Name, 
+ggplot(quant_data.filtered %>% pivot_longer(!Gene.Name, 
                                        names_to = "Sample", 
                                        values_to = "Log.Intensity",
                                        values_drop_na = TRUE), 
@@ -177,7 +159,7 @@ names(MNAR) <- quant_data.filtered$Gene.Name
 
 ```{r}
 
-missing_values <- quant_data.log.norm %>% 
+missing_values <- quant_data.filtered %>% 
   mutate(na_vals = rowSums(is.na(.)))
 
 missing_values_hm <- missing_values %>%
@@ -190,7 +172,7 @@ missing_values_hm <- missing_values %>%
 
 MNAR.hm <- MNAR[names(MNAR) %in% rownames(missing_values_hm)]
 
-Heatmap(missing_values_hm, col = c("black", "lightgray"),  name = "Missing Value", 
+Heatmap(missing_values_hm, col = c("black", "gray"),  name = "Missing Value", 
         cluster_rows = TRUE, show_row_dend = FALSE, cluster_row_slices = FALSE,
         left_annotation = rowAnnotation(MNAR = MNAR.hm,
                                         col = list(MNAR=c("TRUE"="darkred", 
@@ -231,7 +213,7 @@ ggplot(missing_values_density, aes(x = Intensity, colour = na_vals)) +
 
 ```{r}
 
-quant_matrix.impute <- MsCoreUtils::impute_mixed(quant_matrix.log.norm, !MNAR, "MLE", "min")
+quant_matrix.impute <- MsCoreUtils::impute_mixed(quant_matrix.filtered, !MNAR, "MLE", "min")
 
 quant_data.impute <- quant_matrix.impute %>%
   as.data.frame() %>%
@@ -254,7 +236,7 @@ ggplot(left_join(missing_values_density, samples, by = "Sample.Name"), aes(x = I
 
 ggplot(imputed_plot, aes(x = Intensity, color = interaction(Cell.Type, Condition, sep = ":"))) +
   geom_density() +
-  labs(y = "Density", color = "Celltype:Condition") + 
+  labs(x = "Log2Intensity", y = "Density", color = "Celltype:Condition") + 
   theme_publish()
 
 ```
@@ -276,16 +258,16 @@ ggplot(quant_data.pca, aes(x = PC1, y = PC2, color = interaction(Cell.Type, Cond
 
 ```
 
+
 ```{r}
 
-samples <- samples %>% mutate(class = factor(paste(Cell.Type, Condition, sep = "."),
-                                   levels = c("ASC_WT.Dark", "ASC_WT.Light",
-                                              "ASC_TLR10_LOV.Dark", "ASC_TLR10_LOV.Light")))
+samples %<>%
+  mutate(class = factor(paste(Cell.Type, Condition, sep = ".")))
 
 DE_design <- model.matrix(~ 0 + samples$class)
 colnames(DE_design) <- levels(samples$class)
 
-fit1 <- lmFit(quant_matrix.impute, design = DE_design)
+fit1 <- lmFit(quant_matrix.impute[,samples$Sample.Name], design = DE_design)
 cont_matrix <- makeContrasts(LightVsDarkInWT = ASC_WT.Light - ASC_WT.Dark,
                              LightVsDarkInTLR10 = ASC_TLR10_LOV.Light - ASC_TLR10_LOV.Dark,
                              TLR10VsWTInDark = ASC_TLR10_LOV.Dark - ASC_WT.Dark,
@@ -293,7 +275,7 @@ cont_matrix <- makeContrasts(LightVsDarkInWT = ASC_WT.Light - ASC_WT.Dark,
                              Diff = (ASC_TLR10_LOV.Light - ASC_TLR10_LOV.Dark) - (ASC_WT.Light - ASC_WT.Dark),
                              levels = DE_design)
 fit2 <- contrasts.fit(fit1, contrasts = cont_matrix)
-fit3 <- eBayes(fit2, trend = TRUE, robust = TRUE)
+fit3 <- eBayes(fit2, trend = TRUE)
 fit3$count <- annotation_data.filtered[annotation_data.filtered$Gene.Name == rownames(fit3$coefficients),]$Peptides
 fit4 <- spectraCounteBayes(fit3)
 
@@ -301,19 +283,103 @@ VarianceBoxplot(fit4)
 
 ```
 
+```{r plot_settings}
+
+## Heatmaps
+
+hm_cluster_rows <- TRUE # Genes
+hm_cluster_cols <- TRUE # Samples
+hm_scale_by_row <- TRUE
+hm_max_rows <- 20
+
+heatmap.colors <- rev(brewer.pal(6, "RdBu")) # For possible color palettes, see 'brewer.pal.info'
+
+#Do not change:
+heatmap.annotation.col <- samples %>%
+  dplyr::select(Sample.Name, Cell.Type, Condition) %>%
+  column_to_rownames("Sample.Name")
+
+## Volcano plot
+
+vp_max_labels <- 50
+vp_lfc_limit <- 4
+
+```
+
 ```{r}
 
 current_contrast <- 1
-DEqMS_res <- outputResult(fit4, coef_col = 1)
-DEqMS_res_q <- DEqMS_res %>% mutate(qval = qvalue(P.Value)$qvalue)
+res.ASC_WT <- outputResult(fit4, coef_col = 1) %>%
+  as_tibble()
+
+res.ASC_WT.sig <- ASC_WT_res %>%
+  filter(sca.adj.pval < 0.05 & abs(logFC) >= 0.58)
+
+quant_data.ASC_WT.sig <- quant_data.impute %>%
+  select(c(Gene.Name, contains("WT"))) %>%
+  filter(Gene.Name %in% res.ASC_WT.sig$gene) %>%
+  column_to_rownames("Gene.Name")
+  
+
+write.csv(res.ASC_WT, file = "results/DEA/ASC_WT_Light_vs_Dark_unfiltered.csv",
+          row.names = FALSE)
+
+write.csv(res.ASC_WT.sig, file = "results/DEA/ASC_WT_Light_vs_Dark_filtered.csv",
+          row.names = FALSE)
 
 ```
 
 ```{r}
 
-topTable(fit3, coef = 1, number = Inf)
+ggplot(data = DEqMS_res, aes(x = sca.P.Value)) + 
+  geom_histogram(binwidth = 0.025)
 
 ```
 
+```{r}
+
+if (nrow(quant_data.ASC_WT.sig) <= hm_max_rows) {
+  
+  heatmap.annotation.row <- annotation_data.filtered %>%
+    filter(Gene.Name %in% rownames(quant_data.ASC_WT.sig))
+  
+  pheatmap(quant_data.ASC_WT.sig,
+         color = heatmap.colors,
+         cluster_rows = hm_cluster_rows,
+         cluster_cols = hm_cluster_cols,
+         annotation = heatmap.annotation.col,
+         labels_row = heatmap.annotation.row$Gene.Name,
+         scale = ifelse(hm_scale_by_row, "row", "none"))
+  
+} else {
+  pheatmap(quant_data.ASC_WT.sig,
+         color = heatmap.colors,
+         cluster_rows = hm_cluster_rows,
+         cluster_cols = hm_cluster_cols,
+         annotation = heatmap.annotation.col,
+         show_rownames = F,
+         scale = ifelse(hm_scale_by_row, "row", "none"))
+  
+  res.ASC_WT.top <- res.ASC_WT.sig %>%
+    arrange(sca.adj.pval) %>%
+    head(hm_max_rows)
+
+  quant_data.ASC_WT.top <- quant_data.ASC_WT.sig %>%
+    filter(rownames(.) %in% res.ASC_WT.top$gene)
+  
+  heatmap.annotation.row <- annotation_data.filtered %>%
+    filter(Gene.Name %in% rownames(quant_data.ASC_WT.top))
+  
+  pheatmap(quant_data.ASC_WT.top,
+           color = heatmap.colors,
+           cluster_rows = hm_cluster_rows,
+           cluster_cols = hm_cluster_cols,
+           annotation = heatmap.annotation.col,
+           labels_row = heatmap.annotation.row$GeneSymbol,
+           scale = ifelse(hm_scale_by_row, "row", "none"))
+
+}
+
+```
 
 
