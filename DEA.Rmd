@@ -14,8 +14,7 @@ library(stringr)
 library(MSstats)
 library(MsCoreUtils)
 library(DEqMS)
-library(ROTS)
-library(SummarizedExperiment)
+library(ggrepel)
 library(pheatmap)
 library(ComplexHeatmap)
 library(envalysis)
@@ -298,13 +297,12 @@ heatmap.colors <- rev(brewer.pal(6, "RdBu")) # For possible color palettes, see 
 
 #Do not change:
 heatmap.annotation.col <- samples %>%
-  dplyr::select(Sample.Name, Cell.Type, Condition) %>%
-  column_to_rownames("Sample.Name")
+  dplyr::select(Sample.Name, Cell.Type, Condition)
 
 ## Volcano plot
 
 vp_max_labels <- 50
-vp_lfc_limit <- 4
+vp_lfc_limit <- NA
 
 ```
 
@@ -314,7 +312,7 @@ current_contrast <- 1
 res.ASC_WT <- outputResult(fit4, coef_col = 1) %>%
   as_tibble()
 
-res.ASC_WT.sig <- ASC_WT_res %>%
+res.ASC_WT.sig <- res.ASC_WT %>%
   filter(sca.adj.pval < 0.05 & abs(logFC) >= 0.58)
 
 quant_data.ASC_WT.sig <- quant_data.impute %>%
@@ -342,23 +340,27 @@ ggplot(data = DEqMS_res, aes(x = sca.P.Value)) +
 
 if (nrow(quant_data.ASC_WT.sig) <= hm_max_rows) {
   
-  heatmap.annotation.row <- annotation_data.filtered %>%
+  hmap.annotation.row <- annotation_data.filtered %>%
     filter(Gene.Name %in% rownames(quant_data.ASC_WT.sig))
   
-  pheatmap(quant_data.ASC_WT.sig,
+  hmap.annotation.col <- heatmap.annotation.col %>%
+    filter(Sample.Name %in% colnames(quant_data.ASC_WT.sig)) %>%
+    column_to_rownames("Sample.Name")
+  
+  pheatmap(as.matrix(quant_data.ASC_WT.sig),
          color = heatmap.colors,
          cluster_rows = hm_cluster_rows,
          cluster_cols = hm_cluster_cols,
-         annotation = heatmap.annotation.col,
-         labels_row = heatmap.annotation.row$Gene.Name,
+         annotation_col = hmap.annotation.col,
+         labels_row = hmap.annotation.row$Gene.Name,
          scale = ifelse(hm_scale_by_row, "row", "none"))
   
 } else {
-  pheatmap(quant_data.ASC_WT.sig,
+  pheatmap(as.matrix(quant_data.ASC_WT.sig),
          color = heatmap.colors,
          cluster_rows = hm_cluster_rows,
          cluster_cols = hm_cluster_cols,
-         annotation = heatmap.annotation.col,
+         annotation_col = hmap.annotation.col,
          show_rownames = F,
          scale = ifelse(hm_scale_by_row, "row", "none"))
   
@@ -372,16 +374,54 @@ if (nrow(quant_data.ASC_WT.sig) <= hm_max_rows) {
   heatmap.annotation.row <- annotation_data.filtered %>%
     filter(Gene.Name %in% rownames(quant_data.ASC_WT.top))
   
-  pheatmap(quant_data.ASC_WT.top,
+  pheatmap(as.matrix(quant_data.ASC_WT.top),
            color = heatmap.colors,
            cluster_rows = hm_cluster_rows,
            cluster_cols = hm_cluster_cols,
-           annotation = heatmap.annotation.col,
-           labels_row = heatmap.annotation.row$GeneSymbol,
+           annotation_col = hmap.annotation.col,
+           labels_row = hmap.annotation.row$GeneSymbol,
            scale = ifelse(hm_scale_by_row, "row", "none"))
 
 }
 
 ```
 
+```{r}
+
+res.ASC_WT.plot <- res.ASC_WT %>%
+  filter(!is.na(sca.adj.pval)) %>%
+  arrange(sca.adj.pval) %>%
+  mutate(threshold = sca.adj.pval < 0.05 & abs(logFC) > 0.58,
+         out_of_bounds = (ifelse(is.na(vp_lfc_limit), 0, abs(logFC) > vp_lfc_limit) * sign(logFC)),
+         logFC_capped = ifelse(out_of_bounds != 0, vp_lfc_limit * sign(logFC), logFC))
+
+if (is.na(vp_max_labels) || nrow(res.ASC_WT.sig) < vp_max_labels) {
+  res.ASC_WT.plot %<>% mutate(genelabels = ifelse(threshold, gene, ""))
+} else {
+  res.ASC_WT.plot %<>% mutate(genelabels = ifelse(threshold & row_number() <= vp_max_labels, gene, ""))
+}
+
+maxFC <- max(abs(res.ASC_WT.plot$logFC))
+if (! is.na(vp_lfc_limit) & vp_lfc_limit < maxFC) {
+  xlim <- vp_lfc_limit
+} else {
+  xlim <- maxFC * 1.04
+}
+
+ggplot(res.ASC_WT.plot, aes(x = logFC_capped, y = sca.adj.pval)) +
+  geom_point(data = subset(res.ASC_WT.plot, out_of_bounds == 0), aes(colour=threshold), alpha = 0.5) +
+  geom_point(data = subset(res.ASC_WT.plot, out_of_bounds == -1), aes(colour=threshold), shape = "\u25c4", size=2) +
+  geom_point(data = subset(res.ASC_WT.plot, out_of_bounds == 1), aes(colour=threshold), shape = "\u25BA", size=2) +
+  geom_hline(yintercept = 0.05, linetype = 2) +
+  geom_vline(xintercept = c(-0.58, 0.58), linetype = 2) +
+  geom_text_repel(aes(label = genelabels)) +
+  scale_x_continuous(breaks = scales::pretty_breaks(), limits = c(-xlim, xlim), expand = expansion(0.01)) +
+  scale_y_continuous(trans = c("log10", "reverse"), breaks = scales::trans_breaks("log10", function(x) 10^x)) +
+  ggtitle("ASC wildtype light vs dark") +
+  xlab("log2 Fold Change") +
+  ylab("adjusted p-value") +
+  #theme_pubr() +
+  theme(legend.position = "none")
+
+```
 
