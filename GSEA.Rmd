@@ -58,15 +58,13 @@ gene_list.ASC_WT_Light_vs_Dark.entrez <- gene_list.ASC_WT_Light_vs_Dark.entrez[!
 ```{r ASC_WT_Light_vs_Dark_go_bp, warning=FALSE}
 
 set.seed(5892)
-gseGO_BP.ASC_WT_Light_vs_Dark <- gseGO(gene_list.ASC_WT_Light_vs_Dark,
+gseGO_BP.ASC_WT_Light_vs_Dark <- gseGO(gene_list.ASC_WT_Light_vs_Dark.entrez,
                                     ont = "BP",
                                     OrgDb = org.Hs.eg.db,
-                                    keyType = "SYMBOL",
-                                    maxGSSize = 500,
-                                    minGSSize = 15, 
+                                    keyType = "ENTREZID",
                                     seed = TRUE)
 
-gseGO_BP.ASC_WT_Light_vs_Dark <- setReadable(gseGO_BP.ASC_WT_Light_vs_Dark, "org.Hs.eg.db", "ENSEMBL")
+gseGO_BP.ASC_WT_Light_vs_Dark <- setReadable(gseGO_BP.ASC_WT_Light_vs_Dark, "org.Hs.eg.db", "ENTREZID")
 gseGO_BP.ASC_WT_Light_vs_Dark
 
 write.csv(data.frame(gseGO_BP.ASC_WT_Light_vs_Dark), file = paste0(out.dir, "gsea_go.csv"), row.names = F)
@@ -108,8 +106,6 @@ gseGO_MF.ASC_WT_Light_vs_Dark <- gseGO(gene_list.ASC_WT_Light_vs_Dark,
                                     ont = "MF",
                                     OrgDb = org.Hs.eg.db,
                                     keyType = "SYMBOL",
-                                    maxGSSize = 500,
-                                    minGSSize = 15, 
                                     seed = TRUE)
 
 gseGO_MF.ASC_WT_Light_vs_Dark <- setReadable(gseGO_MF.ASC_WT_Light_vs_Dark, "org.Hs.eg.db", "ENSEMBL")
@@ -154,8 +150,6 @@ gseGO_CC.ASC_WT_Light_vs_Dark <- gseGO(gene_list.ASC_WT_Light_vs_Dark,
                                     ont = "CC",
                                     OrgDb = org.Hs.eg.db,
                                     keyType = "SYMBOL",
-                                    maxGSSize = 500,
-                                    minGSSize = 15, 
                                     seed = TRUE)
 
 gseGO_CC.ASC_WT_Light_vs_Dark <- setReadable(gseGO_CC.ASC_WT_Light_vs_Dark, "org.Hs.eg.db", "ENSEMBL")
@@ -200,8 +194,6 @@ gseKEGG.ASC_WT_Light_vs_Dark <- gseKEGG(gene_list.ASC_WT_Light_vs_Dark.entrez,
                          organism = "hsa",
                          keyType = "ncbi-geneid",
                          eps = 0,
-                         maxGSSize = 500,
-                         minGSSize = 15,
                          seed = T)
 
 gseKEGG.ASC_WT_Light_vs_Dark <- setReadable(gseKEGG.ASC_WT_Light_vs_Dark, "org.Hs.eg.db", "ENTREZID")

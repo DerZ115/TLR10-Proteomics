@@ -6,6 +6,7 @@ libraries <- c("tidyverse", "magrittr", "readxl", "stringr","MSstats",
 
 lapply(libraries, library, character.only = TRUE)
 
+
 read_DIA_report <- function(path) {
   data <- read.delim(path, header = TRUE, sep = "\t", dec = ",", na.strings = c("NaN", "NA", "")) %>%
     mutate(PG.ProteinNames = str_split_i(PG.ProteinNames, ";", 1),
@@ -127,50 +128,74 @@ get_MNAR <- function(df) {
 }
 
 
-plot_missing_heatmap <- function(MS1.df, MS2.df, mnar, colors_rows = NULL, colors_columns = NULL) {
+plot_missing_heatmap <- function(MS1.df, MS2.df, mnar, samples, colors_rows = NULL, colors_columns = NULL) {
   missing_values_MS1 <- MS1.df %>%
-    column_to_rownames("Gene.Name") %>%
-    mutate(across(everything(), ~ is.na(.))) %>%
-    mutate(na_vals = rowSums(.))
+    set_colnames(colnames(.) %>% str_remove("_MS1$")) %>%
+    mutate(across(!Gene.Name, ~ is.na(.))) %>%
+    mutate(na_vals = rowSums(across(!Gene.Name)), across(!c(Gene.Name, na_vals), as.numeric))
     
     
   missing_values_MS2 <- MS2.df %>%
-    column_to_rownames("Gene.Name") %>%
-    mutate(across(everything(), ~ is.na(.))) %>%
-    mutate(na_vals = rowSums(.))
+    set_colnames(colnames(.) %>% str_remove("_MS2$")) %>%
+    mutate(across(!Gene.Name, ~ is.na(.))) %>%
+    mutate(na_vals = rowSums(across(!Gene.Name)), across(!c(Gene.Name, na_vals), ~2 * as.numeric(.x)))
   
-  missing_values_hm <- merge(missing_values_MS1, missing_values_MS2, 
-                             by = "row.names", suffixes = c("_MS1", "_MS2")) %>%
-    filter() %>%
-    mutate(across(!c(Gene.Name, na_vals), ~ is.na(.))) %>%
-    select(!na_vals) %>%
+  missing_values_hm <- bind_rows(missing_values_MS1,
+                                 missing_values_MS2) %>%
+    group_by(Gene.Name) %>%
+    summarise(across(everything(), sum)) %>%
     column_to_rownames("Gene.Name") %>%
-    mutate(across(everything(), ~ as.integer(.x))) %>%
+    filter(na_vals > 0) %>%
+    select(!na_vals) %>%
+    mutate(across(everything(), ~ case_match(.x,
+                                             0 ~ "Neither",
+                                             1 ~ "MS1",
+                                             2 ~ "MS2",
+                                             3 ~ "Both"))) %>%
     as.matrix()
   
   MNAR.hm <- mnar[names(mnar) %in% rownames(missing_values_hm)]
   
-  Heatmap(missing_values_hm, col = c("black", "gray"),  name = "Missing Value", 
-          cluster_rows = TRUE, show_row_dend = FALSE, cluster_row_slices = FALSE,
+  dist_lookup <- matrix(c(0, 1, 1, 2, 
+                          1, 0, 2, 1,  
+                          1, 2, 0, 1,
+                          2, 1, 1, 0),
+                        nrow = 4,
+                        dimnames = list(c("Neither", "MS1", "MS2", "Both"),
+                                        c("Neither", "MS1", "MS2", "Both")))
+  
+  Heatmap(missing_values_hm, col = c(Neither="black", MS1="darkblue", MS2="darkred", Both="gray"),  
+          name = "Missing Value", cluster_rows = TRUE, show_row_dend = FALSE, 
+          clustering_distance_rows = function(x, y) {
+            sum(dist_lookup[matrix(c(x, y), ncol = 2)])
+          },
+          cluster_row_slices = FALSE, show_column_names = FALSE, 
+          show_row_names = FALSE, split = MNAR.hm, row_title = NULL, 
+          column_title = NULL, cluster_columns = FALSE, 
           left_annotation = rowAnnotation(MNAR = MNAR.hm,
                                           col = colors_rows,
                                           show_annotation_name = FALSE),
-          top_annotation = HeatmapAnnotation(Celltype = colData(data.filtered)$Cell.Type,
-                                             Condition = colData(data.filtered)$Condition,
-                                             col = colors_columns),
-          split = MNAR.hm, show_column_names = FALSE, show_row_names = FALSE, 
-          row_title = NULL, column_title = NULL, cluster_columns = FALSE, 
-          heatmap_legend_param = list(labels = c("Yes", "No")))
+          top_annotation = HeatmapAnnotation(Celltype = samples$Cell.Type,
+                                             Condition = samples$Condition,
+                                             col = colors_columns))
 }
 
 
-plot_missing_density <- function(df) {
-  missing_values_density <- df %>%
+plot_missing_density <- function(MS1.df, MS2.df) {
+  missing_values_density_MS1 <- MS1.df %>%
     mutate(na_vals = rowSums(is.na(.)) > 0) %>%
-    pivot_longer(!c(Gene.Name, na_vals), names_to = "Sample.Name", values_to = "Intensity") %>%
+    pivot_longer(!c(Gene.Name, na_vals), names_to = "Sample.Name", values_to = "Intensity") 
+  
+  missing_values_density_MS2 <- MS2.df %>%
+    mutate(na_vals = rowSums(is.na(.)) > 0) %>%
+    pivot_longer(!c(Gene.Name, na_vals), names_to = "Sample.Name", values_to = "Intensity") 
+  
+  missing_values_density <- bind_rows(list(MS1=missing_values_density_MS1,
+                                           MS2=missing_values_density_MS2), 
+                                      .id = "Source") %>%
     na.omit()
   
-  p1 <- ggplot(missing_values_density, aes(x = Intensity, color = na_vals)) +
+  p1 <- ggplot(missing_values_density, aes(x = Intensity, color = interaction(Source, na_vals, sep = ":"))) +
     geom_density() +
     labs(x = "Log2Intensity", y = "Density", color = "Has missing values") + 
     scale_color_discrete(labels = c("No", "Yes")) +
@@ -180,10 +205,10 @@ plot_missing_density <- function(df) {
           legend.position = "none",
           panel.grid.major = element_line(linewidth = 0.5))
   
-  p2 <- ggplot(missing_values_density, aes(x = Intensity, color = na_vals)) +
+  p2 <- ggplot(missing_values_density, aes(x = Intensity, color = interaction(Source, na_vals, sep = ":"))) +
     stat_ecdf() +
     labs(x = "Log2Intensity", y = "Cumulative Fraction", color = "Has missing values") + 
-    scale_color_discrete(labels = c("No", "Yes")) +
+    scale_color_discrete(labels = c("MS1:No", "MS2:No", "MS1:Yes", "MS2:Yes")) +
     theme_publish() +
     theme(panel.grid.major = element_line(linewidth = 0.5))
   
