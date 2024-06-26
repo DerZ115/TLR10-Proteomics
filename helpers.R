@@ -14,7 +14,7 @@ read_DIA_report <- function(path) {
              PG.Genes,
              PG.ProteinNames,
              PG.NrOfStrippedSequencesIdentified..Experiment.wide.,
-             ends_with("Log2Quantity"))) %>%
+             matches("MS[12]Quantity"))) %>%
     group_by(PG.Genes) %>%
     summarise(PG.ProteinNames = dplyr::first(PG.ProteinNames),
               PG.ProteinGroups = paste(PG.ProteinGroups, sep = ";", collapse = ""),
@@ -24,47 +24,70 @@ read_DIA_report <- function(path) {
     set_colnames(c("Gene.Name", "Protein.Name", "Protein.Groups", "Peptides",
                    colnames(.)[5:ncol(.)] %>% 
                      str_remove("X\\.\\d+\\.\\.") %>% 
-                     str_remove("\\.raw\\.PG\\.Log2Quantity") %>%
+                     str_replace("\\.raw\\.PG\\.", "_") %>%
+                     str_remove("Quantity") %>%
                      str_replace("_WO_", "_Dark_"))) %>%
   column_to_rownames("Gene.Name")
   
-  quant_data <- data %>% 
-    select(matches("^(?:ADIPO_|OSTEO_)?ASC_(?:WT|TLR10_LOV)_(?:SN|WCL)_(?:Dark|Light)_\\d$")) %>%
+  quant_data_MS1 <- data %>% 
+    select(matches("^(?:ADIPO_|OSTEO_)?ASC_(?:WT|TLR10_LOV)_(?:SN|WCL)_(?:Dark|Light)_\\d+_MS1$")) %>%
+    set_colnames(str_remove(colnames(.), "_MS1$")) %>%
+    as.matrix()
+  
+  quant_data_MS2 <- data %>% 
+    select(matches("^(?:ADIPO_|OSTEO_)?ASC_(?:WT|TLR10_LOV)_(?:SN|WCL)_(?:Dark|Light)_\\d+_MS2$")) %>%
+    set_colnames(str_remove(colnames(.), "_MS2$")) %>%
     as.matrix()
   
   annotation_data <- data %>%
     select(c(Protein.Name, Protein.Groups, Peptides))
   
-  sample_data <- colnames(quant_data) %>% 
+  sample_data <- colnames(quant_data_MS1) %>% 
     data.frame(Sample.Name = .) %>% 
     separate_wider_regex(Sample.Name, c(Cell.Type = ".*", 
                                         "_[:alpha:]*_", 
                                         Condition = "[:alpha:]*", 
                                         "_", 
-                                        Replicate = "\\d"),
+                                        Replicate = "\\d+"),
                          cols_remove = FALSE) %>%
     column_to_rownames("Sample.Name") %>%
     mutate(Cell.Type = factor(Cell.Type, unique(Cell.Type)),
            Condition = factor(Condition, c("Dark", "Light")))
   
-  SummarizedExperiment(list(quant_data), rowData = annotation_data, colData = sample_data)
+  SummarizedExperiment(list(MS1 = quant_data_MS1, MS2 = quant_data_MS2), rowData = annotation_data, colData = sample_data)
 }
 
 
-plot_missing <- function(df) {
-  missing_values <- df %>%
+plot_missing <- function(MS1.df, MS2.df) {
+  missing_values_MS1 <- MS1.df %>%
+    mutate(na_vals = rowSums(is.na(.)))
+  missing_values_MS2 <- MS2.df %>%
     mutate(na_vals = rowSums(is.na(.)))
   
-  ggplot(missing_values %>% dplyr::count(na_vals), aes(x = na_vals, y = n)) + 
+  p1 <- ggplot(missing_values_MS1 %>% dplyr::count(na_vals), aes(x = na_vals, y = n)) + 
     geom_bar(stat = "identity") +
     geom_text(aes(label = n), vjust=-0.3) +
-    scale_x_continuous(breaks = seq(0, max(missing_values$na_vals), by = 1)) +
-    labs(x = "# Missing", y = "Count")
+    scale_x_continuous(breaks = seq(0, max(c(missing_values_MS1$na_vals, 
+                                             missing_values_MS2$na_vals)), 
+                                    by = 1)) +
+    scale_y_continuous(expand = expansion(mult=c(0, 0.15))) +
+    labs(title = "MS1", x = "# Missing", y = "Count")
+  
+  p2 <- ggplot(missing_values_MS2 %>% dplyr::count(na_vals), aes(x = na_vals, y = n)) + 
+    geom_bar(stat = "identity") +
+    geom_text(aes(label = n), vjust=-0.3) +
+    scale_x_continuous(breaks = seq(0, max(c(missing_values_MS1$na_vals, 
+                                             missing_values_MS2$na_vals)), 
+                                    by = 1)) +
+    scale_y_continuous(expand = expansion(mult=c(0, 0.15))) +
+    labs(title = "MS2", x = "# Missing", y = "Count")
+  
+  p1 / p2 + plot_layout(axes = "collect")
 }
 
 
-filter_too_many_missing <- function(df) {
-  df %>% pivot_longer(!Gene.Name, names_to = "Sample.Name", ) %>%
+filter_too_many_missing <- function(MS1.df, MS2.df) {
+  keep1 <- MS1.df %>% pivot_longer(!Gene.Name, names_to = "Sample.Name", ) %>%
     mutate(value = !is.na(value), Sample.Name = str_remove(Sample.Name, "_\\d+$")) %>%
     group_by(Gene.Name, Sample.Name) %>%
     summarise(Group.Count = sum(value), .groups = "drop") %>%
@@ -72,6 +95,17 @@ filter_too_many_missing <- function(df) {
     pivot_wider(names_from = Sample.Name, values_from = Group.Count) %>%
     filter(if_any(everything(), ~ . == 3)) %>%
     pull(Gene.Name)
+  
+  keep2 <- MS2.df %>% pivot_longer(!Gene.Name, names_to = "Sample.Name", ) %>%
+    mutate(value = !is.na(value), Sample.Name = str_remove(Sample.Name, "_\\d+$")) %>%
+    group_by(Gene.Name, Sample.Name) %>%
+    summarise(Group.Count = sum(value), .groups = "drop") %>%
+    ungroup() %>%
+    pivot_wider(names_from = Sample.Name, values_from = Group.Count) %>%
+    filter(if_any(everything(), ~ . == 3)) %>%
+    pull(Gene.Name)
+  
+  intersect(keep1, keep2)
 }
   
 
@@ -93,19 +127,28 @@ get_MNAR <- function(df) {
 }
 
 
-plot_missing_heatmap <- function(df, mnar, colors_rows = NULL, colors_columns = NULL) {
-  missing_values <- df %>%
-    mutate(na_vals = rowSums(is.na(.)))
+plot_missing_heatmap <- function(MS1.df, MS2.df, mnar, colors_rows = NULL, colors_columns = NULL) {
+  missing_values_MS1 <- MS1.df %>%
+    column_to_rownames("Gene.Name") %>%
+    mutate(across(everything(), ~ is.na(.))) %>%
+    mutate(na_vals = rowSums(.))
+    
+    
+  missing_values_MS2 <- MS2.df %>%
+    column_to_rownames("Gene.Name") %>%
+    mutate(across(everything(), ~ is.na(.))) %>%
+    mutate(na_vals = rowSums(.))
   
-  missing_values_hm <- missing_values %>%
-    filter(na_vals > 0) %>%
+  missing_values_hm <- merge(missing_values_MS1, missing_values_MS2, 
+                             by = "row.names", suffixes = c("_MS1", "_MS2")) %>%
+    filter() %>%
     mutate(across(!c(Gene.Name, na_vals), ~ is.na(.))) %>%
     select(!na_vals) %>%
     column_to_rownames("Gene.Name") %>%
     mutate(across(everything(), ~ as.integer(.x))) %>%
     as.matrix()
   
-  MNAR.hm <- MNAR[names(mnar) %in% rownames(missing_values_hm)]
+  MNAR.hm <- mnar[names(mnar) %in% rownames(missing_values_hm)]
   
   Heatmap(missing_values_hm, col = c("black", "gray"),  name = "Missing Value", 
           cluster_rows = TRUE, show_row_dend = FALSE, cluster_row_slices = FALSE,
