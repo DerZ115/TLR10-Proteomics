@@ -204,30 +204,30 @@ ggplot(data.pca, aes(x = PC1, y = PC2, color = interaction(Cell.Type, Condition,
 
 ```{r}
 
+samples <- colData(data.imputed) %>%
+  as.data.frame() %>%
+  rownames_to_column("Sample.Name") %>%
+  bind_rows(., ., .id = "MS") %>%
+  mutate(class = factor(paste(Cell.Type, Condition, sep = ".")),
+         Sample.Name = paste(Sample.Name, MS, sep = "_MS")) %>%
+  column_to_rownames("Sample.Name")
+
+
+data.merged <- merge(as.data.frame(assay(data.imputed, "MS1")),
+                     as.data.frame(assay(data.imputed, "MS2")),
+                     by = "row.names", suffixes = c("_MS1", "_MS2")) %>%
+  column_to_rownames("Row.names") %>%
+  as.matrix()
+
 # samples <- colData(data.imputed) %>% 
-#   as.data.frame() %>%
-#   rownames_to_column("Sample.Name") %>%
-#   bind_rows(., ., .id = "MS") %>%
-#   mutate(class = factor(paste(Cell.Type, Condition, sep = ".")),
-#          Sample.Name = paste(Sample.Name, MS, sep = "_MS")) %>%
-#   column_to_rownames("Sample.Name")
+#    as.data.frame() %>%
+#    mutate(class = factor(paste(Cell.Type, Condition, sep = ".")))
+#   
 # 
-# 
-# data.merged <- merge(as.data.frame(assay(data.imputed, "MS1")), 
-#                      as.data.frame(assay(data.imputed, "MS2")),
-#                      by = "row.names", suffixes = c("_MS1", "_MS2")) %>%
-#   column_to_rownames("Row.names") %>%
-#   as.matrix()
+DE_design <- model.matrix(~ 0 + samples$class + samples$Replicate + samples$MS)
+colnames(DE_design) <- c(levels(samples$class), "Replicate2", "Replicate3", "MS2")
 
-samples <- colData(data.imputed) %>% 
-   as.data.frame() %>%
-   mutate(class = factor(paste(Cell.Type, Condition, sep = ".")))
-  
-
-DE_design <- model.matrix(~ 0 + samples$class)
-colnames(DE_design) <- levels(samples$class)
-
-fit1 <- lmFit(assay(data.imputed, "MS2"), design = DE_design)
+fit1 <- lmFit(data.merged, design = DE_design)
 cont_matrix <- makeContrasts(LightVsDarkInWT = ADIPO_ASC_WT.Light - ADIPO_ASC_WT.Dark,
                              LightVsDarkInTLR10 = ADIPO_ASC_TLR10_LOV.Light - ADIPO_ASC_TLR10_LOV.Dark,
                              TLR10VsWTInDark = ADIPO_ASC_TLR10_LOV.Dark - ADIPO_ASC_WT.Dark,
@@ -256,7 +256,7 @@ heatmap.colors <- rev(brewer.pal(6, "RdBu")) # For possible color palettes, see 
 
 ## Volcano plot
 
-vp_max_labels <- 50
+vp_max_labels <- 100
 vp_lfc_limit <- NA
 
 ```
@@ -356,18 +356,22 @@ if (nrow(data.ASC_WT.sig) <= hm_max_rows) {
 res.ASC_WT.plot <- res.ASC_WT %>%
   filter(!is.na(sca.adj.pval)) %>%
   arrange(sca.adj.pval) %>%
+  rowwise() %>%
   mutate(threshold = sca.adj.pval < 0.05 & abs(logFC) > 0.58,
-         out_of_bounds = (ifelse(is.na(vp_lfc_limit), 0, abs(logFC) > vp_lfc_limit) * sign(logFC)),
-         logFC_capped = ifelse(out_of_bounds != 0, vp_lfc_limit * sign(logFC), logFC))
+         out_of_bounds = ifelse(is.na(vp_lfc_limit), 0, (abs(logFC) > vp_lfc_limit) * sign(logFC)),
+         logFC_capped = ifelse(out_of_bounds != 0, vp_lfc_limit * sign(logFC), logFC)) %>%
+  ungroup()
 
 if (is.na(vp_max_labels) || nrow(res.ASC_WT.sig) < vp_max_labels) {
-  res.ASC_WT.plot %<>% mutate(genelabels = ifelse(threshold, gene, ""))
+  res.ASC_WT.plot %<>% arrange(desc(threshold)) %>%
+    mutate(genelabels = ifelse(threshold, gene, ""))
 } else {
-  res.ASC_WT.plot %<>% mutate(genelabels = ifelse(threshold & row_number() <= vp_max_labels, gene, ""))
+  res.ASC_WT.plot %<>% arrange(desc(threshold), sca.adj.pval) %>%
+    mutate(genelabels = ifelse(threshold & (row_number() <= vp_max_labels), gene, ""))
 }
 
 maxFC <- max(abs(res.ASC_WT.plot$logFC))
-if (! is.na(vp_lfc_limit) & vp_lfc_limit < maxFC) {
+if (!is.na(vp_lfc_limit) & vp_lfc_limit < maxFC) {
   xlim <- vp_lfc_limit
 } else {
   xlim <- maxFC * 1.04
@@ -379,7 +383,7 @@ ggplot(res.ASC_WT.plot, aes(x = logFC_capped, y = sca.adj.pval)) +
   geom_point(data = subset(res.ASC_WT.plot, out_of_bounds == 1), aes(colour=threshold), shape = "\u25BA", size=2) +
   geom_hline(yintercept = 0.05, linetype = 2) +
   geom_vline(xintercept = c(-0.58, 0.58), linetype = 2) +
-  geom_text_repel(aes(label = genelabels)) +
+  geom_text_repel(aes(label = genelabels), max.overlaps = 75) +
   scale_x_continuous(breaks = scales::pretty_breaks(), limits = c(-xlim, xlim), expand = expansion(0.01)) +
   scale_y_continuous(trans = c("log10", "reverse"), breaks = scales::trans_breaks("log10", function(x) 10^x)) +
   ggtitle("ASC wildtype light vs dark") +
