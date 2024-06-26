@@ -73,32 +73,16 @@ data_MS2.log2.df <- assay(data.log2, "MS2") %>%
   as.data.frame() %>%
   rownames_to_column("Gene.Name")
 
+
+plot_intensity_boxplot(data_MS1.log2.df, data_MS2.log2.df)
+
 ```
+
 
 ```{r}
 
-data_MS1.plot <- data_MS1.log2.df %>%
-  pivot_longer(!Gene.Name, names_to = "Sample", 
-               values_to = "Log2Intensity", values_drop_na = TRUE)
-
-data_MS2.plot <- data_MS2.log2.df %>%
-  pivot_longer(!Gene.Name, names_to = "Sample", 
-               values_to = "Log2Intensity", values_drop_na = TRUE)
-
-p1 <- ggplot(data_MS1.plot, aes(x = Sample, y = Log2Intensity)) +
-  geom_boxplot() +
-  labs(x = "") +
-  theme(axis.text.x = element_blank())
-
-p2 <- ggplot(data_MS2.plot, aes(x = Sample, y = Log2Intensity)) +
-  geom_boxplot() +
-  labs(x = "") +
-  theme(axis.text.x = element_blank())
-
-p1 / p2 + plot_layout(axes = "collect")
-
 data.norm <- data.log2
-assays(data.norm) %<>% lapply(normalize_matrix, "diff.median")
+#assays(data.norm) %<>% lapply(normalize_matrix, "diff.median")
 
 data_MS1.norm.df <- assay(data.norm, "MS1") %>%
   as.data.frame() %>%
@@ -108,25 +92,7 @@ data_MS2.norm.df <- assay(data.norm, "MS2") %>%
   as.data.frame() %>%
   rownames_to_column("Gene.Name")
 
-data_MS1.plot <- data_MS1.norm.df %>%
-  pivot_longer(!Gene.Name, names_to = "Sample", 
-               values_to = "Log2Intensity", values_drop_na = TRUE)
-
-data_MS2.plot <- data_MS2.norm.df %>%
-  pivot_longer(!Gene.Name, names_to = "Sample", 
-               values_to = "Log2Intensity", values_drop_na = TRUE)
-
-p1 <- ggplot(data_MS1.plot, aes(x = Sample, y = Log2Intensity)) +
-  geom_boxplot() +
-  labs(x = "") +
-  theme(axis.text.x = element_blank())
-
-p2 <- ggplot(data_MS2.plot, aes(x = Sample, y = Log2Intensity)) +
-  geom_boxplot() +
-  labs(x = "") +
-  theme(axis.text.x = element_blank())
-
-p1 / p2 + plot_layout(axes = "collect")
+plot_intensity_boxplot(data_MS1.norm.df, data_MS2.norm.df)
 
 ```
 
@@ -136,19 +102,19 @@ MNAR_MS1 <- get_MNAR(data_MS1.norm.df)
 MNAR_MS2 <- get_MNAR(data_MS2.norm.df)
 MNAR <- MNAR_MS1 | MNAR_MS2
 
-plot_missing_heatmap(data_MS1.norm.df, data_MS2.norm.df, MNAR_MS1, 
+plot_missing_heatmap(data_MS1.norm.df, data_MS2.norm.df, MNAR, colData(data.norm),
                      colors_columns = list(Celltype=c("ADIPO_ASC_WT" = "lightblue",
                                                       "ADIPO_ASC_TLR10_LOV" = "lightgreen"),
                                            Condition=c("Light" = "orange",
                                                        "Dark" = "midnightblue")),
-                     colors_rows = list(MNAR=c("TRUE"="darkred",
-                                               "FALSE"="blue")))
+                     colors_rows = list(MNAR=c("TRUE"="darkgreen",
+                                               "FALSE"="darkmagenta")))
 
 ```
 
 ```{r}
 
-plot_missing_density(data.norm.df)
+plot_missing_density(data_MS1.norm.df, data_MS2.norm.df)
 
 ```
 
@@ -157,9 +123,13 @@ plot_missing_density(data.norm.df)
 
 data.imputed <- data.norm
 
-assay(data.imputed) %<>% MsCoreUtils::impute_mixed(!MNAR, "MLE", "min")
+assays(data.imputed) %<>% lapply(MsCoreUtils::impute_mixed, !MNAR, "MLE", "min")
 
-data.imputed.df <- assay(data.imputed) %>%
+data_MS1.imputed.df <- assay(data.imputed, "MS1") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+data_MS2.imputed.df <- assay(data.imputed, "MS2") %>%
   as.data.frame() %>%
   rownames_to_column("Gene.Name")
   
@@ -167,30 +137,13 @@ data.imputed.df <- assay(data.imputed) %>%
 
 ```{r}
 
-plot_imputation_density(data.norm.df, data.imputed.df, colData(data.imputed))
+plot_imputation_density(data.norm, data.imputed)
 
 ```
 
 ```{r}
 
-samples <- colData(data.imputed) %>% 
-  as.data.frame() %>%
-  rownames_to_column("Sample.Name")
-
-data.pca <- assay(data.imputed) %>%
-  t() %>%
-  prcomp() %$% x %>%
-  as.data.frame() %>%
-  rownames_to_column("Sample.Name") %>%
-  left_join(samples, by = "Sample.Name")
-  
-ggplot(data.pca, aes(x = PC1, y = PC2, color = interaction(Cell.Type, Condition, sep = ":"))) +
-  geom_point() +
-  ggrepel::geom_text_repel(aes(label = Sample.Name), size=3) +
-  labs(color = "Celltype:Condition") +
-  theme_publish() +
-  theme(panel.grid.major = element_line(linewidth = 0.5))
-
+plot_pca(data.imputed)
 
 ```
 
@@ -198,26 +151,18 @@ ggplot(data.pca, aes(x = PC1, y = PC2, color = interaction(Cell.Type, Condition,
 
 ```{r}
 
-samples <- colData(data.imputed) %>% 
-  as.data.frame() %>%
-  mutate(class = factor(paste(Cell.Type, Condition, sep = ".")))
 
-DE_design <- model.matrix(~ 0 + samples$class)
-colnames(DE_design) <- levels(samples$class)
+contrast_list <- c(
+  LightVsDarkInWT = "ADIPO_ASC_WT.Light - ADIPO_ASC_WT.Dark", 
+  LightVsDarkInTLR10 = "ADIPO_ASC_TLR10_LOV.Light - ADIPO_ASC_TLR10_LOV.Dark",
+  TLR10VsWTInDark = "ADIPO_ASC_TLR10_LOV.Dark - ADIPO_ASC_WT.Dark",
+  TLR10VsWTInLight = "ADIPO_ASC_TLR10_LOV.Light - ADIPO_ASC_WT.Light",
+  Diff = "(ADIPO_ASC_TLR10_LOV.Light - ADIPO_ASC_TLR10_LOV.Dark) - (ADIPO_ASC_WT.Light - ADIPO_ASC_WT.Dark)"
+)
 
-fit1 <- lmFit(assay(data.imputed), design = DE_design)
-cont_matrix <- makeContrasts(LightVsDarkInWT = ASC_WT.Light - ASC_WT.Dark,
-                             LightVsDarkInTLR10 = ASC_TLR10_LOV.Light - ASC_TLR10_LOV.Dark,
-                             TLR10VsWTInDark = ASC_TLR10_LOV.Dark - ASC_WT.Dark,
-                             TLR10VsWTInLight = ASC_TLR10_LOV.Light - ASC_WT.Light,
-                             Diff = (ASC_TLR10_LOV.Light - ASC_TLR10_LOV.Dark) - (ASC_WT.Light - ASC_WT.Dark),
-                             levels = DE_design)
-fit2 <- contrasts.fit(fit1, contrasts = cont_matrix)
-fit3 <- eBayes(fit2, trend = TRUE)
-fit3$count <- rowData(data.imputed)[rownames(data.imputed) == rownames(fit3$coefficients),]$Peptides
-fit4 <- spectraCounteBayes(fit3)
+fit <- fit_DEqMS_model(data.imputed, contrast_list)
 
-VarianceBoxplot(fit4)
+VarianceBoxplot(fit)
 
 ```
 
@@ -234,7 +179,7 @@ heatmap.colors <- rev(brewer.pal(6, "RdBu")) # For possible color palettes, see 
 
 ## Volcano plot
 
-vp_max_labels <- 50
+vp_max_labels <- 100
 vp_lfc_limit <- NA
 
 ```
@@ -252,14 +197,17 @@ heatmap.annotation.col <- colData(data.imputed) %>%
 ```{r}
 
 current_contrast <- 1
-res.ASC_WT <- outputResult(fit4, coef_col = current_contrast) %>%
-  as_tibble()
+res.ASC_WT <- outputResult(fit, coef_col = current_contrast) %>%
+  as_tibble() %>%
+  mutate(qvalue = qvalue(P.Value)$qvalues,
+         sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
+  select(!c(adj.P.Val, sca.adj.pval))
 
 res.ASC_WT.sig <- res.ASC_WT %>%
-  filter(sca.adj.pval < 0.05 & abs(logFC) >= 0.58)
+  filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
 
-data.ASC_WT.sig <- data.imputed.df %>%
-  select(c(Gene.Name, contains("WT"))) %>%
+data.ASC_WT.sig <- data_MS2.imputed.df %>%
+  dplyr::select(c(Gene.Name, contains("WT"))) %>%
   filter(Gene.Name %in% res.ASC_WT.sig$gene) %>%
   column_to_rownames("Gene.Name")
   
@@ -332,37 +280,170 @@ if (nrow(data.ASC_WT.sig) <= hm_max_rows) {
 ```{r}
 
 res.ASC_WT.plot <- res.ASC_WT %>%
-  filter(!is.na(sca.adj.pval)) %>%
-  arrange(sca.adj.pval) %>%
-  mutate(threshold = sca.adj.pval < 0.05 & abs(logFC) > 0.58,
-         out_of_bounds = (ifelse(is.na(vp_lfc_limit), 0, abs(logFC) > vp_lfc_limit) * sign(logFC)),
-         logFC_capped = ifelse(out_of_bounds != 0, vp_lfc_limit * sign(logFC), logFC))
+  filter(!is.na(sca.qvalue)) %>%
+  arrange(sca.qvalue) %>%
+  rowwise() %>%
+  mutate(threshold = sca.qvalue < 0.05 & abs(logFC) > 0.58,
+         out_of_bounds = ifelse(is.na(vp_lfc_limit), 0, (abs(logFC) > vp_lfc_limit) * sign(logFC)),
+         logFC_capped = ifelse(out_of_bounds != 0, vp_lfc_limit * sign(logFC), logFC)) %>%
+  ungroup()
 
 if (is.na(vp_max_labels) || nrow(res.ASC_WT.sig) < vp_max_labels) {
-  res.ASC_WT.plot %<>% mutate(genelabels = ifelse(threshold, gene, ""))
+  res.ASC_WT.plot %<>% arrange(desc(threshold)) %>%
+    mutate(genelabels = ifelse(threshold, gene, ""))
 } else {
-  res.ASC_WT.plot %<>% mutate(genelabels = ifelse(threshold & row_number() <= vp_max_labels, gene, ""))
+  res.ASC_WT.plot %<>% arrange(desc(threshold), sca.qvalue) %>%
+    mutate(genelabels = ifelse(threshold & (row_number() <= vp_max_labels), gene, ""))
 }
 
 maxFC <- max(abs(res.ASC_WT.plot$logFC))
-if (! is.na(vp_lfc_limit) & vp_lfc_limit < maxFC) {
+if (!is.na(vp_lfc_limit) & vp_lfc_limit < maxFC) {
   xlim <- vp_lfc_limit
 } else {
   xlim <- maxFC * 1.04
 }
 
-ggplot(res.ASC_WT.plot, aes(x = logFC_capped, y = sca.adj.pval)) +
+ggplot(res.ASC_WT.plot, aes(x = logFC_capped, y = sca.qvalue)) +
   geom_point(data = subset(res.ASC_WT.plot, out_of_bounds == 0), aes(colour=threshold), alpha = 0.5) +
   geom_point(data = subset(res.ASC_WT.plot, out_of_bounds == -1), aes(colour=threshold), shape = "\u25c4", size=2) +
   geom_point(data = subset(res.ASC_WT.plot, out_of_bounds == 1), aes(colour=threshold), shape = "\u25BA", size=2) +
   geom_hline(yintercept = 0.05, linetype = 2) +
   geom_vline(xintercept = c(-0.58, 0.58), linetype = 2) +
-  geom_text_repel(aes(label = genelabels)) +
+  geom_text_repel(aes(label = genelabels), max.overlaps = 75) +
   scale_x_continuous(breaks = scales::pretty_breaks(), limits = c(-xlim, xlim), expand = expansion(0.01)) +
   scale_y_continuous(trans = c("log10", "reverse"), breaks = scales::trans_breaks("log10", function(x) 10^x)) +
-  ggtitle("ASC wildtype light vs dark") +
+  ggtitle("ADIPO ASC wildtype light vs dark") +
   xlab("log2 Fold Change") +
-  ylab("adjusted p-value") +
+  ylab("q-value") +
+  theme_publish() +
+  theme(legend.position = "none")
+
+```
+
+
+### ASC TLR10LOV Light vs. Dark
+
+```{r}
+
+current_contrast <- 2
+res.ASC_TLR10LOV <- outputResult(fit, coef_col = current_contrast) %>%
+  as_tibble() %>%
+  mutate(qvalue = qvalue(P.Value)$qvalues,
+         sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
+  dplyr::select(!c(adj.P.Val, sca.adj.pval))
+
+res.ASC_TLR10LOV.sig <- res.ASC_TLR10LOV %>%
+  filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
+
+data.ASC_TLR10LOV.sig <- data_MS2.imputed.df %>%
+  dplyr::select(c(Gene.Name, contains("TLR10LOV"))) %>%
+  filter(Gene.Name %in% res.ASC_TLR10LOV.sig$gene) %>%
+  column_to_rownames("Gene.Name")
+  
+
+write.csv(res.ASC_TLR10LOV, file = "results/DEA/ASC_TLR10LOV_Light_vs_Dark_unfiltered.csv",
+          row.names = FALSE)
+
+write.csv(res.ASC_TLR10LOV.sig, file = "results/DEA/ASC_TLR10LOV_Light_vs_Dark_filtered.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+
+ggplot(data = res.ASC_TLR10LOV, aes(x = sca.P.Value)) + 
+  geom_histogram(binwidth = 0.025)
+
+```
+
+```{r}
+
+hmap.annotation.row <- rowData(data.imputed) %>%
+  as.data.frame %>%
+  filter(rownames(.) %in% rownames(data.ASC_TLR10LOV.sig))
+  
+hmap.annotation.col <- heatmap.annotation.col %>%
+  filter(rownames(.) %in% colnames(data.ASC_TLR10LOV.sig))
+
+if (nrow(data.ASC_TLR10LOV.sig) <= hm_max_rows) {
+  
+  pheatmap(as.matrix(data.ASC_TLR10LOV.sig),
+         color = heatmap.colors,
+         cluster_rows = hm_cluster_rows,
+         cluster_cols = hm_cluster_cols,
+         annotation_col = hmap.annotation.col,
+         labels_row = hmap.annotation.row$Gene.Name,
+         scale = ifelse(hm_scale_by_row, "row", "none"))
+  
+} else {
+  pheatmap(as.matrix(data.ASC_TLR10LOV.sig),
+         color = heatmap.colors,
+         cluster_rows = hm_cluster_rows,
+         cluster_cols = hm_cluster_cols,
+         annotation_col = hmap.annotation.col,
+         show_rownames = F,
+         scale = ifelse(hm_scale_by_row, "row", "none"))
+  
+  res.ASC_TLR10LOV.top <- res.ASC_TLR10LOV.sig %>%
+    arrange(sca.adj.pval) %>%
+    head(hm_max_rows)
+
+  data.ASC_TLR10LOV.top <- data.ASC_TLR10LOV.sig %>%
+    filter(rownames(.) %in% res.ASC_TLR10LOV.top$gene)
+  
+  heatmap.annotation.row %<>%
+    filter(rownames(.) %in% rownames(quant_data.ASC_TLR10LOV.top))
+  
+  pheatmap(as.matrix(quant_data.ASC_TLR10LOV.top),
+           color = heatmap.colors,
+           cluster_rows = hm_cluster_rows,
+           cluster_cols = hm_cluster_cols,
+           annotation_col = hmap.annotation.col,
+           labels_row = hmap.annotation.row$GeneSymbol,
+           scale = ifelse(hm_scale_by_row, "row", "none"))
+
+}
+
+```
+
+```{r}
+
+res.ASC_TLR10LOV.plot <- res.ASC_TLR10LOV %>%
+  filter(!is.na(sca.qvalue)) %>%
+  arrange(sca.qvalue) %>%
+  rowwise() %>%
+  mutate(threshold = sca.qvalue < 0.05 & abs(logFC) > 0.58,
+         out_of_bounds = ifelse(is.na(vp_lfc_limit), 0, (abs(logFC) > vp_lfc_limit) * sign(logFC)),
+         logFC_capped = ifelse(out_of_bounds != 0, vp_lfc_limit * sign(logFC), logFC)) %>%
+  ungroup()
+
+if (is.na(vp_max_labels) || nrow(res.ASC_TLR10LOV.sig) < vp_max_labels) {
+  res.ASC_TLR10LOV.plot %<>% arrange(desc(threshold)) %>%
+    mutate(genelabels = ifelse(threshold, gene, ""))
+} else {
+  res.ASC_TLR10LOV.plot %<>% arrange(desc(threshold), sca.qvalue) %>%
+    mutate(genelabels = ifelse(threshold & (row_number() <= vp_max_labels), gene, ""))
+}
+
+maxFC <- max(abs(res.ASC_TLR10LOV.plot$logFC))
+if (!is.na(vp_lfc_limit) & vp_lfc_limit < maxFC) {
+  xlim <- vp_lfc_limit
+} else {
+  xlim <- maxFC * 1.04
+}
+
+ggplot(res.ASC_TLR10LOV.plot, aes(x = logFC_capped, y = sca.qvalue)) +
+  geom_point(data = subset(res.ASC_TLR10LOV.plot, out_of_bounds == 0), aes(colour=threshold), alpha = 0.5) +
+  geom_point(data = subset(res.ASC_TLR10LOV.plot, out_of_bounds == -1), aes(colour=threshold), shape = "\u25c4", size=2) +
+  geom_point(data = subset(res.ASC_TLR10LOV.plot, out_of_bounds == 1), aes(colour=threshold), shape = "\u25BA", size=2) +
+  geom_hline(yintercept = 0.05, linetype = 2) +
+  geom_vline(xintercept = c(-0.58, 0.58), linetype = 2) +
+  geom_text_repel(aes(label = genelabels), max.overlaps = 75) +
+  scale_x_continuous(breaks = scales::pretty_breaks(), limits = c(-xlim, xlim), expand = expansion(0.01)) +
+  scale_y_continuous(trans = c("log10", "reverse"), breaks = scales::trans_breaks("log10", function(x) 10^x)) +
+  ggtitle("ADIPO ASC wildtype light vs dark") +
+  xlab("log2 Fold Change") +
+  ylab("q-value") +
   theme_publish() +
   theme(legend.position = "none")
 

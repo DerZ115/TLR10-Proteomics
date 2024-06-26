@@ -26,7 +26,7 @@ dir.create(path = "./results/GSEA", showWarnings = FALSE)
 
 # Results
 
-## TLR10 light vs. dark 3h
+## ASC WT Light vs. Dark 
 
 ```{r ASC_WT_Light_vs_Dark_import, warning=FALSE}
 
@@ -58,15 +58,13 @@ gene_list.ASC_WT_Light_vs_Dark.entrez <- gene_list.ASC_WT_Light_vs_Dark.entrez[!
 ```{r ASC_WT_Light_vs_Dark_go_bp, warning=FALSE}
 
 set.seed(5892)
-gseGO_BP.ASC_WT_Light_vs_Dark <- gseGO(gene_list.ASC_WT_Light_vs_Dark,
+gseGO_BP.ASC_WT_Light_vs_Dark <- gseGO(gene_list.ASC_WT_Light_vs_Dark.entrez,
                                     ont = "BP",
                                     OrgDb = org.Hs.eg.db,
-                                    keyType = "SYMBOL",
-                                    maxGSSize = 500,
-                                    minGSSize = 15, 
-                                    seed = TRUE)
+                                    keyType = "ENTREZID",
+                                    pvalueCutoff = 1)
 
-gseGO_BP.ASC_WT_Light_vs_Dark <- setReadable(gseGO_BP.ASC_WT_Light_vs_Dark, "org.Hs.eg.db", "ENSEMBL")
+gseGO_BP.ASC_WT_Light_vs_Dark <- setReadable(gseGO_BP.ASC_WT_Light_vs_Dark, "org.Hs.eg.db", "ENTREZID")
 gseGO_BP.ASC_WT_Light_vs_Dark
 
 write.csv(data.frame(gseGO_BP.ASC_WT_Light_vs_Dark), file = paste0(out.dir, "gsea_go.csv"), row.names = F)
@@ -108,8 +106,6 @@ gseGO_MF.ASC_WT_Light_vs_Dark <- gseGO(gene_list.ASC_WT_Light_vs_Dark,
                                     ont = "MF",
                                     OrgDb = org.Hs.eg.db,
                                     keyType = "SYMBOL",
-                                    maxGSSize = 500,
-                                    minGSSize = 15, 
                                     seed = TRUE)
 
 gseGO_MF.ASC_WT_Light_vs_Dark <- setReadable(gseGO_MF.ASC_WT_Light_vs_Dark, "org.Hs.eg.db", "ENSEMBL")
@@ -154,8 +150,6 @@ gseGO_CC.ASC_WT_Light_vs_Dark <- gseGO(gene_list.ASC_WT_Light_vs_Dark,
                                     ont = "CC",
                                     OrgDb = org.Hs.eg.db,
                                     keyType = "SYMBOL",
-                                    maxGSSize = 500,
-                                    minGSSize = 15, 
                                     seed = TRUE)
 
 gseGO_CC.ASC_WT_Light_vs_Dark <- setReadable(gseGO_CC.ASC_WT_Light_vs_Dark, "org.Hs.eg.db", "ENSEMBL")
@@ -200,8 +194,6 @@ gseKEGG.ASC_WT_Light_vs_Dark <- gseKEGG(gene_list.ASC_WT_Light_vs_Dark.entrez,
                          organism = "hsa",
                          keyType = "ncbi-geneid",
                          eps = 0,
-                         maxGSSize = 500,
-                         minGSSize = 15,
                          seed = T)
 
 gseKEGG.ASC_WT_Light_vs_Dark <- setReadable(gseKEGG.ASC_WT_Light_vs_Dark, "org.Hs.eg.db", "ENTREZID")
@@ -297,3 +289,265 @@ emapplot(gseDO.ASC_WT_Light_vs_Dark.pwts, force = 1.5,
 
 ```
 
+
+## ASC TLR10LOV Light vs. Dark 
+
+```{r ASC_TLR10LOV_Light_vs_Dark_import, warning=FALSE}
+
+out.dir <- "./results/GSEA/ASC_TLR10LOV_Light_vs_Dark/"
+
+dir.create(out.dir)
+
+res.ASC_TLR10LOV_Light_vs_Dark <- read.csv("results/DEA/ASC_TLR10LOV_Light_vs_Dark_unfiltered.csv") %>%
+  as_tibble() %>%
+  arrange(desc(logFC))
+
+gene_list.ASC_TLR10LOV_Light_vs_Dark <- res.ASC_TLR10LOV_Light_vs_Dark$logFC
+names(gene_list.ASC_TLR10LOV_Light_vs_Dark) <- res.ASC_TLR10LOV_Light_vs_Dark$gene
+
+# Convert to ENTREZID (for KEGG)
+ids <- bitr(names(gene_list.ASC_TLR10LOV_Light_vs_Dark), fromType = "SYMBOL", toType = "ENTREZID", OrgDb = org.Hs.eg.db)
+ids <- ids[!duplicated(ids$SYMBOL),]
+
+gene_list.ASC_TLR10LOV_Light_vs_Dark.entrez <- gene_list.ASC_TLR10LOV_Light_vs_Dark[names(gene_list.ASC_TLR10LOV_Light_vs_Dark) %in% ids$SYMBOL]
+names(gene_list.ASC_TLR10LOV_Light_vs_Dark.entrez) <- ids$ENTREZID
+gene_list.ASC_TLR10LOV_Light_vs_Dark.entrez <- gene_list.ASC_TLR10LOV_Light_vs_Dark.entrez[!duplicated(names(gene_list.ASC_TLR10LOV_Light_vs_Dark.entrez))]
+
+```
+
+### Gene ontology
+
+#### Biological Processes
+
+```{r ASC_TLR10LOV_Light_vs_Dark_go_bp, warning=FALSE}
+
+set.seed(5892)
+gseGO_BP.ASC_TLR10LOV_Light_vs_Dark <- gseGO(gene_list.ASC_TLR10LOV_Light_vs_Dark.entrez,
+                                    ont = "BP",
+                                    OrgDb = org.Hs.eg.db,
+                                    keyType = "ENTREZID")
+
+gseGO_BP.ASC_TLR10LOV_Light_vs_Dark <- setReadable(gseGO_BP.ASC_TLR10LOV_Light_vs_Dark, "org.Hs.eg.db", "ENTREZID")
+gseGO_BP.ASC_TLR10LOV_Light_vs_Dark
+
+write.csv(data.frame(gseGO_BP.ASC_TLR10LOV_Light_vs_Dark), file = paste0(out.dir, "gsea_go.csv"), row.names = F)
+
+ASC_TLR10LOV_Light_vs_Dark.go_bp.plot <- nrow(gseGO_BP.ASC_TLR10LOV_Light_vs_Dark) > 0
+
+```
+
+```{r ASC_TLR10LOV_Light_vs_Dark_go_bp_dotplot, eval=ASC_TLR10LOV_Light_vs_Dark.go_bp.plot}
+
+dotplot(gseGO_BP.ASC_TLR10LOV_Light_vs_Dark, showCategory = 15, size = NULL, split = ".sign", font.size = 9) + 
+  facet_grid(~.sign) +
+  scale_fill_gradient(low = "red", high = "white", limits = c(0, 0.05), name = "adj. p-value")
+
+```
+
+```{r ASC_TLR10LOV_Light_vs_Dark_go_bp_netplot, eval=ASC_TLR10LOV_Light_vs_Dark.go_bp.plot, fig.height=10}
+
+cnetplot(gseGO_BP.ASC_TLR10LOV_Light_vs_Dark, showCategory = 5, color.params = list(foldChange = gene_list.ASC_TLR10LOV_Light_vs_Dark),
+         cex.params = list(category_label = 0.6, gene_label = 0.4)) +
+  scale_color_gradient2(low = "blue", mid = "white", high = "red", limits = c(-2, 2), name = "Fold Change", oob = scales::squish)
+
+```
+
+```{r ASC_TLR10LOV_Light_vs_Dark_go_bp_mapplot, eval=ASC_TLR10LOV_Light_vs_Dark.go_bp.plot, fig.height=9}
+gseGO_BP.ASC_TLR10LOV_Light_vs_Dark.pTLR10LOVs <- pairwise_termsim(gseGO_BP.ASC_TLR10LOV_Light_vs_Dark)
+
+emapplot(gseGO_BP.ASC_TLR10LOV_Light_vs_Dark.pTLR10LOVs, force = 1.5,
+         cex.params = list(category_label = 0.8)) +
+  scale_fill_gradient(low = "red", high = "white", limits = c(0, 0.05), name = "adj. p-value")
+```
+
+#### Molecular Function
+
+```{r ASC_TLR10LOV_Light_vs_Dark_go_mf, warning=FALSE}
+
+set.seed(5892)
+gseGO_MF.ASC_TLR10LOV_Light_vs_Dark <- gseGO(gene_list.ASC_TLR10LOV_Light_vs_Dark,
+                                    ont = "MF",
+                                    OrgDb = org.Hs.eg.db,
+                                    keyType = "SYMBOL",
+                                    seed = TRUE)
+
+gseGO_MF.ASC_TLR10LOV_Light_vs_Dark <- setReadable(gseGO_MF.ASC_TLR10LOV_Light_vs_Dark, "org.Hs.eg.db", "ENSEMBL")
+gseGO_MF.ASC_TLR10LOV_Light_vs_Dark
+
+write.csv(data.frame(gseGO_MF.ASC_TLR10LOV_Light_vs_Dark), file = paste0(out.dir, "gsea_go.csv"), row.names = F)
+
+ASC_TLR10LOV_Light_vs_Dark.go_mf.plot <- nrow(gseGO_MF.ASC_TLR10LOV_Light_vs_Dark) > 0
+
+```
+
+```{r ASC_TLR10LOV_Light_vs_Dark_go_mf_dotplot, eval=ASC_TLR10LOV_Light_vs_Dark.go_mf.plot}
+
+dotplot(gseGO_MF.ASC_TLR10LOV_Light_vs_Dark, showCategory = 15, size = NULL, split = ".sign", font.size = 9) + 
+  facet_grid(~.sign) +
+  scale_fill_gradient(low = "red", high = "white", limits = c(0, 0.05), name = "adj. p-value")
+
+```
+
+```{r ASC_TLR10LOV_Light_vs_Dark_go_mf_netplot, eval=ASC_TLR10LOV_Light_vs_Dark.go_mf.plot, fig.height=10}
+
+cnetplot(gseGO_MF.ASC_TLR10LOV_Light_vs_Dark, showCategory = 5, color.params = list(foldChange = gene_list.ASC_TLR10LOV_Light_vs_Dark),
+         cex.params = list(category_label = 0.6, gene_label = 0.4)) +
+  scale_color_gradient2(low = "blue", mid = "white", high = "red", limits = c(-2, 2), name = "Fold Change", oob = scales::squish)
+
+```
+
+```{r ASC_TLR10LOV_Light_vs_Dark_go_mf_mapplot, eval=ASC_TLR10LOV_Light_vs_Dark.go_mf.plot, fig.height=9}
+gseGO_MF.ASC_TLR10LOV_Light_vs_Dark.pTLR10LOVs <- pairwise_termsim(gseGO_MF.ASC_TLR10LOV_Light_vs_Dark)
+
+emapplot(gseGO_MF.ASC_TLR10LOV_Light_vs_Dark.pTLR10LOVs, force = 1.5,
+         cex.params = list(category_label = 0.8)) +
+  scale_fill_gradient(low = "red", high = "white", limits = c(0, 0.05), name = "adj. p-value")
+```
+
+#### Cellular Component
+
+```{r ASC_TLR10LOV_Light_vs_Dark_go_cc, warning=FALSE}
+
+set.seed(5892)
+gseGO_CC.ASC_TLR10LOV_Light_vs_Dark <- gseGO(gene_list.ASC_TLR10LOV_Light_vs_Dark,
+                                    ont = "CC",
+                                    OrgDb = org.Hs.eg.db,
+                                    keyType = "SYMBOL",
+                                    seed = TRUE)
+
+gseGO_CC.ASC_TLR10LOV_Light_vs_Dark <- setReadable(gseGO_CC.ASC_TLR10LOV_Light_vs_Dark, "org.Hs.eg.db", "ENSEMBL")
+gseGO_CC.ASC_TLR10LOV_Light_vs_Dark
+
+write.csv(data.frame(gseGO_CC.ASC_TLR10LOV_Light_vs_Dark), file = paste0(out.dir, "gsea_go.csv"), row.names = F)
+
+ASC_TLR10LOV_Light_vs_Dark.go_cc.plot <- nrow(gseGO_CC.ASC_TLR10LOV_Light_vs_Dark) > 0
+
+```
+
+```{r ASC_TLR10LOV_Light_vs_Dark_go_cc_dotplot, eval=ASC_TLR10LOV_Light_vs_Dark.go_cc.plot}
+
+dotplot(gseGO_CC.ASC_TLR10LOV_Light_vs_Dark, showCategory = 15, size = NULL, split = ".sign", font.size = 9) + 
+  facet_grid(~.sign) +
+  scale_fill_gradient(low = "red", high = "white", limits = c(0, 0.05), name = "adj. p-value")
+
+```
+
+```{r ASC_TLR10LOV_Light_vs_Dark_go_cc_netplot, eval=ASC_TLR10LOV_Light_vs_Dark.go_cc.plot, fig.height=10}
+
+cnetplot(gseGO_CC.ASC_TLR10LOV_Light_vs_Dark, showCategory = 5, color.params = list(foldChange = gene_list.ASC_TLR10LOV_Light_vs_Dark),
+         cex.params = list(category_label = 0.6, gene_label = 0.4)) +
+  scale_color_gradient2(low = "blue", mid = "white", high = "red", limits = c(-2, 2), name = "Fold Change", oob = scales::squish)
+
+```
+
+```{r ASC_TLR10LOV_Light_vs_Dark_go_cc_mapplot, eval=ASC_TLR10LOV_Light_vs_Dark.go_cc.plot, fig.height=9}
+gseGO_CC.ASC_TLR10LOV_Light_vs_Dark.pTLR10LOVs <- pairwise_termsim(gseGO_CC.ASC_TLR10LOV_Light_vs_Dark)
+
+emapplot(gseGO_CC.ASC_TLR10LOV_Light_vs_Dark.pTLR10LOVs, force = 1.5,
+         cex.params = list(category_label = 0.8)) +
+  scale_fill_gradient(low = "red", high = "white", limits = c(0, 0.05), name = "adj. p-value")
+```
+
+### KEGG (Kyoto Encyclopedia of Genes and Genomes)
+
+```{r ASC_TLR10LOV_Light_vs_Dark_kegg, warning=FALSE}
+
+set.seed(5923)
+gseKEGG.ASC_TLR10LOV_Light_vs_Dark <- gseKEGG(gene_list.ASC_TLR10LOV_Light_vs_Dark.entrez,
+                         organism = "hsa",
+                         keyType = "ncbi-geneid",
+                         eps = 0,
+                         seed = T)
+
+gseKEGG.ASC_TLR10LOV_Light_vs_Dark <- setReadable(gseKEGG.ASC_TLR10LOV_Light_vs_Dark, "org.Hs.eg.db", "ENTREZID")
+gseKEGG.ASC_TLR10LOV_Light_vs_Dark
+
+write.csv(data.frame(gseKEGG.ASC_TLR10LOV_Light_vs_Dark), file = paste0(out.dir, "gsea_kegg.csv"), row.names = F)
+
+ASC_TLR10LOV_Light_vs_Dark.kegg.plot <- nrow(gseKEGG.ASC_TLR10LOV_Light_vs_Dark) > 0
+
+```
+
+
+```{r ASC_TLR10LOV_Light_vs_Dark_kegg_dotplot, eval=ASC_TLR10LOV_Light_vs_Dark.kegg.plot, fid.width = 10, fig.height=10}
+
+dotplot(gseKEGG.ASC_TLR10LOV_Light_vs_Dark, showCategory = 15, size = NULL, split = ".sign", font.size = 9, label_format = 40) + 
+  facet_grid(~.sign) +
+  scale_fill_gradient(low = "red", high = "white", limits = c(0, 0.05), name = "adj. p-value")
+
+```
+
+```{r ASC_TLR10LOV_Light_vs_Dark_kegg_netplot, eval=ASC_TLR10LOV_Light_vs_Dark.kegg.plot, fig.height=10}
+
+cnetplot(gseKEGG.ASC_TLR10LOV_Light_vs_Dark, showCategory = 5, color.params = list(foldChange = gene_list.ASC_TLR10LOV_Light_vs_Dark.entrez),
+         cex.params = list(category_label = 0.6, gene_label = 0.4)) +
+  scale_color_gradient2(low = "blue", mid = "white", high = "red", limits = c(-2, 2), name = "Fold Change", oob = scales::squish)
+
+```
+
+```{r ASC_TLR10LOV_Light_vs_Dark_kegg_mapplot, eval=ASC_TLR10LOV_Light_vs_Dark.kegg.plot, fig.height=9}
+gseKEGG.ASC_TLR10LOV_Light_vs_Dark.pTLR10LOVs <- pairwise_termsim(gseKEGG.ASC_TLR10LOV_Light_vs_Dark)
+
+emapplot(gseKEGG.ASC_TLR10LOV_Light_vs_Dark.pTLR10LOVs, force = 1.5,
+         cex.params = list(category_label = 0.8)) +
+  scale_fill_gradient(low = "red", high = "white", limits = c(0, 0.05), name = "adj. p-value")
+
+```
+
+```{r ASC_TLR10LOV_Light_vs_Dark_kegg_pathview, eval=ASC_TLR10LOV_Light_vs_Dark.kegg.plot}
+
+pathview(gene.data = gene_list.ASC_TLR10LOV_Light_vs_Dark.entrez, pathway.id = gseKEGG.ASC_TLR10LOV_Light_vs_Dark@result$ID[1], species = "hsa")
+
+filename <- paste0(gseKEGG.ASC_TLR10LOV_Light_vs_Dark@result$ID[1], ".pathview.png")
+
+file.rename(filename, paste0(out.dir, filename))
+
+knitr::include_graphics(paste0(out.dir, filename))
+
+```
+
+### Disease ontology
+
+```{r ASC_TLR10LOV_Light_vs_Dark_do, warning=FALSE}
+
+set.seed(5534)
+gseDO.ASC_TLR10LOV_Light_vs_Dark <- gseDO(gene_list.ASC_TLR10LOV_Light_vs_Dark.entrez,
+                     eps = 0,
+                     maxGSSize = 500,
+                     minGSSize = 15,
+                     seed = T)
+
+gseDO.ASC_TLR10LOV_Light_vs_Dark <- setReadable(gseDO.ASC_TLR10LOV_Light_vs_Dark, "org.Hs.eg.db", "ENTREZID")
+gseDO.ASC_TLR10LOV_Light_vs_Dark
+
+write.csv(data.frame(gseDO.ASC_TLR10LOV_Light_vs_Dark), file = paste0(out.dir, "gsea_do.csv"), row.names = F)
+
+ASC_TLR10LOV_Light_vs_Dark.DO.plot <- nrow(gseDO.ASC_TLR10LOV_Light_vs_Dark) > 0
+
+```
+
+```{r ASC_TLR10LOV_Light_vs_Dark_do_dotplot, eval=ASC_TLR10LOV_Light_vs_Dark.DO.plot}
+
+dotplot(gseDO.ASC_TLR10LOV_Light_vs_Dark, showCategory = 15, size = NULL, split = ".sign", font.size = 9, label_format = 40) + 
+  facet_grid(~.sign) +
+  scale_fill_gradient(low = "red", high = "white", limits = c(0, 0.05), name = "adj. p-value")
+
+```
+
+```{r ASC_TLR10LOV_Light_vs_Dark_do_netplot, eval=ASC_TLR10LOV_Light_vs_Dark.DO.plot}
+
+cnetplot(gseDO.ASC_TLR10LOV_Light_vs_Dark, showCategory = 5, layout = "dh", color.params = list(foldChange = gene_list.ASC_TLR10LOV_Light_vs_Dark.entrez),
+         cex.params = list(category_label = 0.6, gene_label = 0.4)) +
+  scale_color_gradient2(low = "blue", mid = "white", high = "red", limits = c(-2, 2), name = "Fold Change", oob = scales::squish)
+
+```
+
+```{r ASC_TLR10LOV_Light_vs_Dark_do_mapplot, eval=ASC_TLR10LOV_Light_vs_Dark.DO.plot}
+
+gseDO.ASC_TLR10LOV_Light_vs_Dark.pTLR10LOVs <- pairwise_termsim(gseDO.ASC_TLR10LOV_Light_vs_Dark)
+
+emapplot(gseDO.ASC_TLR10LOV_Light_vs_Dark.pTLR10LOVs, force = 1.5,
+         cex.params = list(category_label = 0.8)) +
+  scale_fill_gradient(low = "red", high = "white", limits = c(0, 0.05), name = "adj. p-value")
+
+```
