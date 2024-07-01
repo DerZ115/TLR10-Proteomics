@@ -2,7 +2,7 @@
 libraries <- c("tidyverse", "magrittr", "readxl", "stringr","MSstats", 
                "SummarizedExperiment", "MsCoreUtils", "DEqMS", "qvalue", "ggrepel",
                "janitor", "ComplexHeatmap", "envalysis", "RColorBrewer", 
-               "patchwork")
+               "patchwork", "circlize")
 
 lapply(libraries, library, character.only = TRUE)
 
@@ -65,12 +65,13 @@ plot_missing <- function(MS1.df, MS2.df) {
   missing_values_MS2 <- MS2.df %>%
     mutate(na_vals = rowSums(is.na(.)))
   
+  xmax <- max(c(missing_values_MS1$na_vals, missing_values_MS2$na_vals))
+  
   p1 <- ggplot(missing_values_MS1 %>% dplyr::count(na_vals), aes(x = na_vals, y = n)) + 
     geom_bar(stat = "identity") +
     geom_text(aes(label = n), vjust=-0.3) +
-    scale_x_continuous(breaks = seq(0, max(c(missing_values_MS1$na_vals, 
-                                             missing_values_MS2$na_vals)), 
-                                    by = 1)) +
+    scale_x_continuous(limits = c(-0.5, xmax + 0.5), breaks = seq(0, xmax, by = 1),
+                       expand = expansion(add=0)) +
     scale_y_continuous(expand = expansion(mult=c(0, 0.15))) +
     labs(title = "MS1", x = "# Missing", y = "Count") +
     theme_publish()
@@ -78,9 +79,8 @@ plot_missing <- function(MS1.df, MS2.df) {
   p2 <- ggplot(missing_values_MS2 %>% dplyr::count(na_vals), aes(x = na_vals, y = n)) + 
     geom_bar(stat = "identity") +
     geom_text(aes(label = n), vjust=-0.3) +
-    scale_x_continuous(breaks = seq(0, max(c(missing_values_MS1$na_vals, 
-                                             missing_values_MS2$na_vals)), 
-                                    by = 1)) +
+    scale_x_continuous(limits = c(-0.5, xmax + 0.5), breaks = seq(0, xmax, by = 1),
+                       expand = expansion(add=0)) +
     scale_y_continuous(expand = expansion(mult=c(0, 0.15))) +
     labs(title = "MS2", x = "# Missing", y = "Count") +
     theme_publish()
@@ -217,23 +217,25 @@ plot_missing_density <- function(MS1.df, MS2.df) {
   
   missing_values_density <- bind_rows(list(MS1=missing_values_density_MS1,
                                            MS2=missing_values_density_MS2), 
-                                      .id = "Source") %>%
+                                      .id = "MS") %>%
     na.omit()
   
-  p1 <- ggplot(missing_values_density, aes(x = Intensity, color = interaction(Source, na_vals, sep = ":"))) +
+  p1 <- ggplot(missing_values_density, aes(x = Intensity, color = na_vals, linetype = MS)) +
     geom_density(linewidth = 1) +
     labs(x = "Log2Intensity", y = "Density", color = "Has missing values") + 
     scale_color_discrete(labels = c("No", "Yes")) +
+    scale_linetype_manual(values = c(MS1 = 2, MS2 = 1)) +
     theme_publish() + 
     theme(axis.text.x = element_blank(),
           axis.title.x = element_blank(),
           legend.position = "none",
           panel.grid.major = element_line(linewidth = 0.5))
   
-  p2 <- ggplot(missing_values_density, aes(x = Intensity, color = interaction(Source, na_vals, sep = ":"))) +
+  p2 <- ggplot(missing_values_density, aes(x = Intensity, color = na_vals, linetype = MS)) +
     stat_ecdf(linewidth = 1) +
     labs(x = "Log2Intensity", y = "Cumulative Fraction", color = "Has missing values") + 
     scale_color_discrete(labels = c("MS1:No", "MS2:No", "MS1:Yes", "MS2:Yes")) +
+    scale_linetype_manual(values = c(MS1 = 2, MS2 = 1)) +
     theme_publish() +
     theme(panel.grid.major = element_line(linewidth = 0.5))
   
@@ -269,7 +271,7 @@ plot_imputation_density <- function(before, after) {
                                 color = interaction(Cell.Type, Condition, sep = ":"), 
                                 linetype = MS)) +
     geom_density(linewidth = 1) +
-    scale_linetype_manual(values = c(MS1 = 3, MS2 = 1)) +
+    scale_linetype_manual(values = c(MS1 = 2, MS2 = 1)) +
     labs(title = "Before", x = "Log2Intensity", y = "Density", color = "Celltype:Condition") + 
     theme_publish() +
     theme(axis.text.x = element_blank(),
@@ -281,7 +283,7 @@ plot_imputation_density <- function(before, after) {
                                color = interaction(Cell.Type, Condition, sep = ":"),
                                linetype = MS)) +
     geom_density(linewidth = 1) +
-    scale_linetype_manual(values = c(MS1 = 3, MS2 = 1)) +
+    scale_linetype_manual(values = c(MS1 = 2, MS2 = 1)) +
     labs(title = "After", x = "Log2Intensity", y = "Density", color = "Celltype:Condition") + 
     theme_publish() +
     theme(panel.grid.major = element_line(linewidth = 0.5))
@@ -347,4 +349,103 @@ fit_DEqMS_model <- function(data, contrast_list) {
   fit4 <- spectraCounteBayes(fit3)
   
   fit4
+}
+
+
+plot_heatmap <- function(data.sig, color_scale, colors_columns, qvalues = NA, 
+                         title = NA, max_rows = 20, cluster_rows = TRUE, 
+                         cluster_cols = TRUE, scale_by_row = TRUE) {
+  hmap.annotation.row <- rowData(data.sig) %>%
+    as.data.frame()
+  
+  hmap.annotation.col <- colData(data.sig) %>% 
+    as.data.frame() %>%
+    dplyr::select(Cell.Type, Condition)
+  
+  if (scale_by_row) {
+    assays(data.sig) %<>%
+      lapply(function(x) t(scale(t(x))))
+  }
+  
+  if (nrow(data.sig) <= max_rows) {
+    hm <- Heatmap(assay(data.sig, "MS2"), col = color_scale,  
+                  name = title, cluster_rows = cluster_rows, 
+                  show_row_dend = TRUE, show_column_names = FALSE, show_row_names = TRUE, 
+                  row_title = NULL, column_title = NULL, cluster_columns = cluster_cols, 
+                  top_annotation = HeatmapAnnotation(Celltype = hmap.annotation.col$Cell.Type,
+                                                     Condition = hmap.annotation.col$Condition,
+                                                     col = colors_columns))
+    
+    draw(hm)
+  } else {
+    
+    hm1 <- Heatmap(assay(data.sig, "MS2"), col = color_scale,  
+                   name = title, cluster_rows = cluster_rows, 
+                   show_row_dend = FALSE, show_column_names = FALSE, show_row_names = FALSE, 
+                   row_title = NULL, column_title = NULL, cluster_columns = cluster_cols, 
+                   top_annotation = HeatmapAnnotation(Celltype = hmap.annotation.col$Cell.Type,
+                                                      Condition = hmap.annotation.col$Condition,
+                                                      col = colors_columns))
+    
+    data.top <- data.sig[names(sort(qvalues)),] %>%
+      head(max_rows)
+    
+    hmap.annotation.row %<>%
+      filter(rownames(.) %in% rownames(data.top))
+    
+    hm2 <- Heatmap(assay(data.top, "MS2"), col = color_scale,  
+                   name = title, cluster_rows = cluster_rows, 
+                   show_row_dend = TRUE, show_column_names = FALSE, show_row_names = TRUE, 
+                   row_title = NULL, column_title = NULL, cluster_columns = cluster_cols, 
+                   top_annotation = HeatmapAnnotation(Celltype = hmap.annotation.col$Cell.Type,
+                                                      Condition = hmap.annotation.col$Condition,
+                                                      col = colors_columns))
+    
+    draw(hm1)
+    draw(hm2)
+  }
+}
+
+plot_volcano <- function(res, title = "", lfc_limit = NA, max_labels = NA) {
+  res.plot <- res %>%
+    filter(!is.na(sca.qvalue)) %>%
+    arrange(sca.qvalue) %>%
+    rowwise() %>%
+    mutate(threshold = sca.qvalue < 0.05 & abs(logFC) > 0.58,
+           out_of_bounds = ifelse(is.na(lfc_limit), 0, (abs(logFC) > lfc_limit) * sign(logFC)),
+           logFC_capped = ifelse(out_of_bounds != 0, lfc_limit * sign(logFC), logFC)) %>%
+    ungroup()
+  
+  res.sig <- res %>%
+    filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
+  
+  if (is.na(max_labels) || nrow(res.sig) < max_labels) {
+    res.plot %<>% arrange(desc(threshold)) %>%
+      mutate(genelabels = ifelse(threshold, gene, ""))
+  } else {
+    res.plot %<>% arrange(desc(threshold), sca.qvalue) %>%
+      mutate(genelabels = ifelse(threshold & (row_number() <= max_labels), gene, ""))
+  }
+  
+  maxFC <- max(abs(res.plot$logFC))
+  if (!is.na(lfc_limit) && lfc_limit < maxFC) {
+    xlim <- lfc_limit
+  } else {
+    xlim <- maxFC * 1.04
+  }
+  
+  ggplot(res.plot, aes(x = logFC_capped, y = sca.qvalue)) +
+    geom_point(data = subset(res.plot, out_of_bounds == 0), aes(colour=threshold), alpha = 0.5) +
+    geom_point(data = subset(res.plot, out_of_bounds == -1), aes(colour=threshold), shape = "\u25c4", size=2) +
+    geom_point(data = subset(res.plot, out_of_bounds == 1), aes(colour=threshold), shape = "\u25BA", size=2) +
+    geom_hline(yintercept = 0.05, linetype = 2) +
+    geom_vline(xintercept = c(-0.58, 0.58), linetype = 2) +
+    geom_text_repel(aes(label = genelabels)) +
+    scale_x_continuous(breaks = scales::pretty_breaks(), limits = c(-xlim, xlim), expand = expansion(0.01)) +
+    scale_y_continuous(trans = c("log10", "reverse"), breaks = scales::trans_breaks("log10", function(x) 10^x)) +
+    ggtitle(title) +
+    xlab("log2 Fold Change") +
+    ylab("q-value") +
+    theme_publish() +
+    theme(legend.position = "none")
 }

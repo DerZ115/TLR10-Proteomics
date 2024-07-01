@@ -13,13 +13,31 @@ knitr::opts_chunk$set(fig.width = 10, dpi = 300, results = "hold", fig.show = "h
 
 ```
 
+```{r plot_settings}
+
+## Heatmaps
+
+hm_cluster_rows <- TRUE # Genes
+hm_cluster_cols <- TRUE # Samples
+hm_scale_by_row <- TRUE
+hm_max_rows <- 20
+
+heatmap.colors <- colorRamp2(c(-2, 0, 2), c("darkblue", "white", "darkred"))
+
+## Volcano plot
+
+vp_max_labels <- 100
+vp_lfc_limit <- NA
+
+```
+
 ## Undifferentiated
 
 ### Supernatant
 
 ```{r}
 
-data <- read_DIA_report("data/withMS1/20240626_081714_ADIPO_ASC_WCL_TLR10_Light_Report.tsv")
+data <- read_DIA_report("data/MS1MS2/20240701_082307_ASC_SN_TLR10_Light_Report.tsv")
 
 data_MS1.df <- assay(data, "MS1") %>%
   as.data.frame() %>%
@@ -82,7 +100,881 @@ plot_intensity_boxplot(data_MS1.log2.df, data_MS2.log2.df)
 ```{r}
 
 data.norm <- data.log2
-#assays(data.norm) %<>% lapply(normalize_matrix, "diff.median")
+assays(data.norm) %<>% lapply(normalize_matrix, "diff.median")
+
+data_MS1.norm.df <- assay(data.norm, "MS1") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+data_MS2.norm.df <- assay(data.norm, "MS2") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+plot_intensity_boxplot(data_MS1.norm.df, data_MS2.norm.df)
+
+```
+
+```{r}
+
+MNAR_MS1 <- get_MNAR(data_MS1.norm.df)
+MNAR_MS2 <- get_MNAR(data_MS2.norm.df)
+MNAR <- MNAR_MS1 | MNAR_MS2
+
+plot_missing_heatmap(data_MS1.norm.df, data_MS2.norm.df, MNAR, colData(data.norm),
+                     colors_columns = list(Celltype=c("ASC_WT" = "lightblue",
+                                                      "ASC_TLR10_LOV" = "lightgreen"),
+                                           Condition=c("Light" = "orange",
+                                                       "Dark" = "midnightblue")),
+                     colors_rows = list(MNAR=c("TRUE"="darkgreen",
+                                               "FALSE"="darkmagenta")))
+
+```
+
+```{r}
+
+plot_missing_density(data_MS1.norm.df, data_MS2.norm.df)
+
+```
+
+
+```{r}
+
+data.imputed <- data.norm
+
+assays(data.imputed) %<>% lapply(MsCoreUtils::impute_mixed, !MNAR, "MLE", "min")
+
+data_MS1.imputed.df <- assay(data.imputed, "MS1") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+data_MS2.imputed.df <- assay(data.imputed, "MS2") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+  
+```
+
+```{r}
+
+plot_imputation_density(data.norm, data.imputed)
+
+```
+
+```{r}
+
+plot_pca(data.imputed)
+
+```
+
+```{r}
+
+
+contrast_list <- c(
+  LightVsDarkInWT = "ASC_WT.Light - ASC_WT.Dark", 
+  LightVsDarkInTLR10 = "ASC_TLR10_LOV.Light - ASC_TLR10_LOV.Dark",
+  TLR10VsWTInDark = "ASC_TLR10_LOV.Dark - ASC_WT.Dark",
+  TLR10VsWTInLight = "ASC_TLR10_LOV.Light - ASC_WT.Light",
+  Diff = "(ASC_TLR10_LOV.Light - ASC_TLR10_LOV.Dark) - (ASC_WT.Light - ASC_WT.Dark)"
+)
+
+fit <- fit_DEqMS_model(data.imputed, contrast_list)
+
+VarianceBoxplot(fit)
+
+```
+
+```{r}
+
+heatmap.annotation.col <- colData(data.imputed) %>% 
+  as.data.frame() %>%
+  dplyr::select(Cell.Type, Condition)
+
+```
+
+#### ASC Wildtype Light vs. Dark
+
+```{r}
+
+current_contrast <- 1
+res <- outputResult(fit, coef_col = current_contrast) %>%
+  as_tibble() %>%
+  mutate(qvalue = qvalue(P.Value)$qvalues,
+         sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
+  select(!c(adj.P.Val, sca.adj.pval))
+
+res.sig <- res %>%
+  filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
+
+qvals.sig <- res.sig$sca.qvalue
+names(qvals.sig) <- res.sig$gene
+
+data.sig <- data.imputed[rownames(data.imputed) %in% res.sig$gene, 
+                         str_detect(colnames(data.imputed), "WT")]
+
+data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
+  
+
+write.csv(res, file = "results/DEA/ASC_WT_Light_vs_Dark_SN_unfiltered.csv",
+          row.names = FALSE)
+
+write.csv(res.sig, file = "results/DEA/ASC_WT_Light_vs_Dark_SN_filtered.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+
+ggplot(data = res, aes(x = sca.P.Value)) + 
+  geom_histogram(binwidth = 0.025)
+
+```
+
+```{r}
+
+plot_heatmap(data.sig, heatmap.colors, list(Celltype=c("ASC_WT" = "lightblue",
+                                                       "ASC_TLR10_LOV" = "lightgreen"),
+                                            Condition=c("Light" = "orange",
+                                                        "Dark" = "midnightblue")),
+             qvalues = qvals.sig, title = "Rel. LogIntensity", max_rows = hm_max_rows, cluster_rows = hm_cluster_rows,
+             cluster_cols = hm_cluster_cols, scale_by_row = hm_scale_by_row)
+
+```
+
+```{r}
+
+plot_volcano(res, "ASC Wildtype Light vs. Dark Supernatant", vp_lfc_limit, vp_max_labels)
+
+```
+
+
+#### ASC TLR10LOV Light vs. Dark
+
+```{r}
+
+current_contrast <- 2
+res <- outputResult(fit, coef_col = current_contrast) %>%
+  as_tibble() %>%
+  mutate(qvalue = qvalue(P.Value)$qvalues,
+         sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
+  select(!c(adj.P.Val, sca.adj.pval))
+
+res.sig <- res %>%
+  filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
+
+qvals.sig <- res.sig$sca.qvalue
+names(qvals.sig) <- res.sig$gene
+
+data.sig <- data.imputed[rownames(data.imputed) %in% res.sig$gene, 
+                         str_detect(colnames(data.imputed), "TLR10_LOV")]
+
+data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
+  
+
+write.csv(res, file = "results/DEA/ASC_TLR10LOV_Light_vs_Dark_SN_unfiltered.csv",
+          row.names = FALSE)
+
+write.csv(res.sig, file = "results/DEA/ASC_TLR10LOV_Light_vs_Dark_SN_filtered.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+
+ggplot(data = res, aes(x = sca.P.Value)) + 
+  geom_histogram(binwidth = 0.025)
+
+```
+
+```{r}
+
+plot_heatmap(data.sig, heatmap.colors, list(Celltype=c("ASC_WT" = "lightblue",
+                                                       "ASC_TLR10_LOV" = "lightgreen"),
+                                            Condition=c("Light" = "orange",
+                                                        "Dark" = "midnightblue")),
+             qvalues = qvals.sig, title = "Rel. LogIntensity", max_rows = hm_max_rows, cluster_rows = hm_cluster_rows,
+             cluster_cols = hm_cluster_cols, scale_by_row = hm_scale_by_row)
+
+```
+
+```{r}
+
+plot_volcano(res, "ASC TLR10LOV Light vs. Dark", vp_lfc_limit, vp_max_labels)
+
+```
+
+
+#### ASC TLR10LOV vs. Wildtype Dark
+
+```{r}
+
+current_contrast <- 3
+res <- outputResult(fit, coef_col = current_contrast) %>%
+  as_tibble() %>%
+  mutate(qvalue = qvalue(P.Value)$qvalues,
+         sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
+  select(!c(adj.P.Val, sca.adj.pval))
+
+res.sig <- res %>%
+  filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
+
+qvals.sig <- res.sig$sca.qvalue
+names(qvals.sig) <- res.sig$gene
+
+data.sig <- data.imputed[rownames(data.imputed) %in% res.sig$gene, 
+                         str_detect(colnames(data.imputed), "Dark")]
+
+data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
+  
+
+write.csv(res, file = "results/DEA/ASC_WT_vs_TLR10LOV_Dark_unfiltered.csv",
+          row.names = FALSE)
+
+write.csv(res.sig, file = "results/DEA/ASC_WT_vs_TLR10LOV_Dark_filtered.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+
+ggplot(data = res, aes(x = sca.P.Value)) + 
+  geom_histogram(binwidth = 0.025)
+
+```
+
+```{r}
+
+plot_heatmap(data.sig, heatmap.colors, list(Celltype=c("ASC_WT" = "lightblue",
+                                                       "ASC_TLR10_LOV" = "lightgreen"),
+                                            Condition=c("Light" = "orange",
+                                                        "Dark" = "midnightblue")),
+             qvalues = qvals.sig, title = "Rel. LogIntensity", max_rows = hm_max_rows, cluster_rows = hm_cluster_rows,
+             cluster_cols = hm_cluster_cols, scale_by_row = hm_scale_by_row)
+
+```
+
+```{r}
+
+plot_volcano(res, "ASC TLR10LOV vs. Wildtype Dark", vp_lfc_limit, vp_max_labels)
+
+```
+
+
+#### ASC TLR10LOV vs. Wildtype Light
+
+```{r}
+
+current_contrast <- 4
+res <- outputResult(fit, coef_col = current_contrast) %>%
+  as_tibble() %>%
+  mutate(qvalue = qvalue(P.Value)$qvalues,
+         sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
+  select(!c(adj.P.Val, sca.adj.pval))
+
+res.sig <- res %>%
+  filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
+
+qvals.sig <- res.sig$sca.qvalue
+names(qvals.sig) <- res.sig$gene
+
+data.sig <- data.imputed[rownames(data.imputed) %in% res.sig$gene, 
+                         str_detect(colnames(data.imputed), "Light")]
+
+data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
+  
+
+write.csv(res, file = "results/DEA/ASC_WT_vs_TLR10LOV_Light_unfiltered.csv",
+          row.names = FALSE)
+
+write.csv(res.sig, file = "results/DEA/ASC_WT_vs_TLR10LOV_Light_filtered.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+
+ggplot(data = res, aes(x = sca.P.Value)) + 
+  geom_histogram(binwidth = 0.025)
+
+```
+
+```{r}
+
+plot_heatmap(data.sig, heatmap.colors, list(Celltype=c("ASC_WT" = "lightblue",
+                                                       "ASC_TLR10_LOV" = "lightgreen"),
+                                            Condition=c("Light" = "orange",
+                                                        "Dark" = "midnightblue")),
+             qvalues = qvals.sig, title = "Rel. LogIntensity", max_rows = hm_max_rows, cluster_rows = hm_cluster_rows,
+             cluster_cols = hm_cluster_cols, scale_by_row = hm_scale_by_row)
+
+```
+
+```{r}
+
+plot_volcano(res, "ASC TLR10LOV vs. Wildtype Light", vp_lfc_limit, vp_max_labels)
+
+```
+
+
+#### ASC Interaction TLR10LOV vs. WT & Light vs. Dark
+
+```{r}
+
+current_contrast <- 5
+res <- outputResult(fit, coef_col = current_contrast) %>%
+  as_tibble() %>%
+  mutate(qvalue = qvalue(P.Value)$qvalues,
+         sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
+  select(!c(adj.P.Val, sca.adj.pval))
+
+res.sig <- res %>%
+  filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
+
+qvals.sig <- res.sig$sca.qvalue
+names(qvals.sig) <- res.sig$gene
+
+data.sig <- data.imputed[rownames(data.imputed) %in% res.sig$gene, ]
+
+data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
+  
+
+write.csv(res, file = "results/DEA/ASC_Interaction_unfiltered.csv",
+          row.names = FALSE)
+
+write.csv(res.sig, file = "results/DEA/ASC_Interaction_filtered.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+
+ggplot(data = res, aes(x = sca.P.Value)) + 
+  geom_histogram(binwidth = 0.025)
+
+```
+
+```{r}
+
+plot_heatmap(data.sig, heatmap.colors, list(Celltype=c("ASC_WT" = "lightblue",
+                                                       "ASC_TLR10_LOV" = "lightgreen"),
+                                            Condition=c("Light" = "orange",
+                                                        "Dark" = "midnightblue")),
+             qvalues = qvals.sig, title = "Rel. LogIntensity", max_rows = hm_max_rows, cluster_rows = hm_cluster_rows,
+             cluster_cols = hm_cluster_cols, scale_by_row = hm_scale_by_row)
+
+```
+
+```{r}
+
+plot_volcano(res, "ASC Interaction", vp_lfc_limit, vp_max_labels)
+
+```
+
+
+### Whole Cell Lysate
+
+```{r}
+
+data <- read_DIA_report("data/MS1MS2/20240701_082255_ASC_WCL_TLR10_Light_Report.tsv")
+
+data_MS1.df <- assay(data, "MS1") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+data_MS2.df <- assay(data, "MS2") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+```
+
+```{r}
+
+plot_missing(data_MS1.df, data_MS2.df)
+
+```
+
+```{r}
+
+keep <- filter_too_many_missing(data_MS1.df, data_MS2.df)
+
+data.filtered <- data[rownames(data) %in% keep,]
+
+
+data_MS1.filtered.df <- assay(data.filtered, "MS1") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+data_MS2.filtered.df <- assay(data.filtered, "MS2") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+```
+
+
+```{r}
+
+plot_missing(data_MS1.filtered.df, data_MS2.filtered.df)
+
+```
+
+```{r}
+
+data.log2 <- data.filtered
+assays(data.log2) %<>% lapply(log2)
+
+data_MS1.log2.df <- assay(data.log2, "MS1") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+data_MS2.log2.df <- assay(data.log2, "MS2") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+
+plot_intensity_boxplot(data_MS1.log2.df, data_MS2.log2.df)
+
+```
+
+
+```{r}
+
+data.norm <- data.log2
+assays(data.norm) %<>% lapply(normalize_matrix, "diff.median")
+
+data_MS1.norm.df <- assay(data.norm, "MS1") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+data_MS2.norm.df <- assay(data.norm, "MS2") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+plot_intensity_boxplot(data_MS1.norm.df, data_MS2.norm.df)
+
+```
+
+```{r}
+
+MNAR_MS1 <- get_MNAR(data_MS1.norm.df)
+MNAR_MS2 <- get_MNAR(data_MS2.norm.df)
+MNAR <- MNAR_MS1 | MNAR_MS2
+
+plot_missing_heatmap(data_MS1.norm.df, data_MS2.norm.df, MNAR, colData(data.norm),
+                     colors_columns = list(Celltype=c("ASC_WT" = "lightblue",
+                                                      "ASC_TLR10_LOV" = "lightgreen"),
+                                           Condition=c("Light" = "orange",
+                                                       "Dark" = "midnightblue")),
+                     colors_rows = list(MNAR=c("TRUE"="darkgreen",
+                                               "FALSE"="darkmagenta")))
+
+```
+
+```{r}
+
+plot_missing_density(data_MS1.norm.df, data_MS2.norm.df)
+
+```
+
+
+```{r}
+
+data.imputed <- data.norm
+
+assays(data.imputed) %<>% lapply(MsCoreUtils::impute_mixed, !MNAR, "MLE", "min")
+
+data_MS1.imputed.df <- assay(data.imputed, "MS1") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+data_MS2.imputed.df <- assay(data.imputed, "MS2") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+  
+```
+
+```{r}
+
+plot_imputation_density(data.norm, data.imputed)
+
+```
+
+```{r}
+
+plot_pca(data.imputed)
+
+```
+
+```{r}
+
+
+contrast_list <- c(
+  LightVsDarkInWT = "ASC_WT.Light - ASC_WT.Dark", 
+  LightVsDarkInTLR10 = "ASC_TLR10_LOV.Light - ASC_TLR10_LOV.Dark",
+  TLR10VsWTInDark = "ASC_TLR10_LOV.Dark - ASC_WT.Dark",
+  TLR10VsWTInLight = "ASC_TLR10_LOV.Light - ASC_WT.Light",
+  Diff = "(ASC_TLR10_LOV.Light - ASC_TLR10_LOV.Dark) - (ASC_WT.Light - ASC_WT.Dark)"
+)
+
+fit <- fit_DEqMS_model(data.imputed, contrast_list)
+
+VarianceBoxplot(fit)
+
+```
+
+```{r}
+
+heatmap.annotation.col <- colData(data.imputed) %>% 
+  as.data.frame() %>%
+  dplyr::select(Cell.Type, Condition)
+
+```
+
+#### ASC Wildtype Light vs. Dark
+
+```{r}
+
+current_contrast <- 1
+res <- outputResult(fit, coef_col = current_contrast) %>%
+  as_tibble() %>%
+  mutate(qvalue = qvalue(P.Value)$qvalues,
+         sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
+  select(!c(adj.P.Val, sca.adj.pval))
+
+res.sig <- res %>%
+  filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
+
+qvals.sig <- res.sig$sca.qvalue
+names(qvals.sig) <- res.ASC_WT.sig$gene
+
+data.sig <- data.imputed[rownames(data.imputed) %in% res.sig$gene, 
+                         str_detect(colnames(data.imputed), "WT")]
+
+data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
+  
+
+write.csv(res, file = "results/DEA/ASC_WT_Light_vs_Dark_unfiltered.csv",
+          row.names = FALSE)
+
+write.csv(res.sig, file = "results/DEA/ASC_WT_Light_vs_Dark_filtered.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+
+ggplot(data = res, aes(x = sca.P.Value)) + 
+  geom_histogram(binwidth = 0.025)
+
+```
+
+```{r}
+
+plot_heatmap(data.sig, heatmap.colors, list(Celltype=c("ASC_WT" = "lightblue",
+                                                       "ASC_TLR10_LOV" = "lightgreen"),
+                                            Condition=c("Light" = "orange",
+                                                        "Dark" = "midnightblue")),
+             qvalues = qvals.sig, title = "Rel. LogIntensity", max_rows = hm_max_rows, cluster_rows = hm_cluster_rows,
+             cluster_cols = hm_cluster_cols, scale_by_row = hm_scale_by_row)
+
+```
+
+```{r}
+
+plot_volcano(res, "ASC Wildtype Light vs. Dark", vp_lfc_limit, vp_max_labels)
+
+```
+
+
+#### ASC TLR10LOV Light vs. Dark
+
+```{r}
+
+current_contrast <- 2
+res <- outputResult(fit, coef_col = current_contrast) %>%
+  as_tibble() %>%
+  mutate(qvalue = qvalue(P.Value)$qvalues,
+         sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
+  select(!c(adj.P.Val, sca.adj.pval))
+
+res.sig <- res %>%
+  filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
+
+qvals.sig <- res.sig$sca.qvalue
+names(qvals.sig) <- res.sig$gene
+
+data.sig <- data.imputed[rownames(data.imputed) %in% res.sig$gene, 
+                         str_detect(colnames(data.imputed), "TLR10_LOV")]
+
+data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
+  
+
+write.csv(res, file = "results/DEA/ASC_TLR10LOV_Light_vs_Dark_unfiltered.csv",
+          row.names = FALSE)
+
+write.csv(res.sig, file = "results/DEA/ASC_TLR10LOV_Light_vs_Dark_filtered.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+
+ggplot(data = res, aes(x = sca.P.Value)) + 
+  geom_histogram(binwidth = 0.025)
+
+```
+
+```{r}
+
+plot_heatmap(data.sig, heatmap.colors, list(Celltype=c("ASC_WT" = "lightblue",
+                                                       "ASC_TLR10_LOV" = "lightgreen"),
+                                            Condition=c("Light" = "orange",
+                                                        "Dark" = "midnightblue")),
+             qvalues = qvals.sig, title = "Rel. LogIntensity", max_rows = hm_max_rows, cluster_rows = hm_cluster_rows,
+             cluster_cols = hm_cluster_cols, scale_by_row = hm_scale_by_row)
+
+```
+
+```{r}
+
+plot_volcano(res, "ASC TLR10LOV Light vs. Dark", vp_lfc_limit, vp_max_labels)
+
+```
+
+
+#### ASC TLR10LOV vs. Wildtype Dark
+
+```{r}
+
+current_contrast <- 3
+res <- outputResult(fit, coef_col = current_contrast) %>%
+  as_tibble() %>%
+  mutate(qvalue = qvalue(P.Value)$qvalues,
+         sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
+  select(!c(adj.P.Val, sca.adj.pval))
+
+res.sig <- res %>%
+  filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
+
+qvals.sig <- res.sig$sca.qvalue
+names(qvals.sig) <- res.sig$gene
+
+data.sig <- data.imputed[rownames(data.imputed) %in% res.sig$gene, 
+                         str_detect(colnames(data.imputed), "Dark")]
+
+data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
+  
+
+write.csv(res, file = "results/DEA/ASC_WT_vs_TLR10LOV_Dark_unfiltered.csv",
+          row.names = FALSE)
+
+write.csv(res.sig, file = "results/DEA/ASC_WT_vs_TLR10LOV_Dark_filtered.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+
+ggplot(data = res, aes(x = sca.P.Value)) + 
+  geom_histogram(binwidth = 0.025)
+
+```
+
+```{r}
+
+plot_heatmap(data.sig, heatmap.colors, list(Celltype=c("ASC_WT" = "lightblue",
+                                                       "ASC_TLR10_LOV" = "lightgreen"),
+                                            Condition=c("Light" = "orange",
+                                                        "Dark" = "midnightblue")),
+             qvalues = qvals.sig, title = "Rel. LogIntensity", max_rows = hm_max_rows, cluster_rows = hm_cluster_rows,
+             cluster_cols = hm_cluster_cols, scale_by_row = hm_scale_by_row)
+
+```
+
+```{r}
+
+plot_volcano(res, "ASC TLR10LOV vs. Wildtype Dark", vp_lfc_limit, vp_max_labels)
+
+```
+
+
+#### ASC TLR10LOV vs. Wildtype Light
+
+```{r}
+
+current_contrast <- 4
+res <- outputResult(fit, coef_col = current_contrast) %>%
+  as_tibble() %>%
+  mutate(qvalue = qvalue(P.Value)$qvalues,
+         sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
+  select(!c(adj.P.Val, sca.adj.pval))
+
+res.sig <- res %>%
+  filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
+
+qvals.sig <- res.sig$sca.qvalue
+names(qvals.sig) <- res.sig$gene
+
+data.sig <- data.imputed[rownames(data.imputed) %in% res.sig$gene, 
+                         str_detect(colnames(data.imputed), "Light")]
+
+data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
+  
+
+write.csv(res, file = "results/DEA/ASC_WT_vs_TLR10LOV_Light_unfiltered.csv",
+          row.names = FALSE)
+
+write.csv(res.sig, file = "results/DEA/ASC_WT_vs_TLR10LOV_Light_filtered.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+
+ggplot(data = res, aes(x = sca.P.Value)) + 
+  geom_histogram(binwidth = 0.025)
+
+```
+
+```{r}
+
+plot_heatmap(data.sig, heatmap.colors, list(Celltype=c("ASC_WT" = "lightblue",
+                                                       "ASC_TLR10_LOV" = "lightgreen"),
+                                            Condition=c("Light" = "orange",
+                                                        "Dark" = "midnightblue")),
+             qvalues = qvals.sig, title = "Rel. LogIntensity", max_rows = hm_max_rows, cluster_rows = hm_cluster_rows,
+             cluster_cols = hm_cluster_cols, scale_by_row = hm_scale_by_row)
+
+```
+
+```{r}
+
+plot_volcano(res, "ASC TLR10LOV vs. Wildtype Light", vp_lfc_limit, vp_max_labels)
+
+```
+
+
+#### ASC Interaction TLR10LOV vs. WT & Light vs. Dark
+
+```{r}
+
+current_contrast <- 5
+res <- outputResult(fit, coef_col = current_contrast) %>%
+  as_tibble() %>%
+  mutate(qvalue = qvalue(P.Value)$qvalues,
+         sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
+  select(!c(adj.P.Val, sca.adj.pval))
+
+res.sig <- res %>%
+  filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
+
+qvals.sig <- res.sig$sca.qvalue
+names(qvals.sig) <- res.sig$gene
+
+data.sig <- data.imputed[rownames(data.imputed) %in% res.sig$gene, ]
+
+data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
+  
+
+write.csv(res, file = "results/DEA/ASC_Interaction_unfiltered.csv",
+          row.names = FALSE)
+
+write.csv(res.sig, file = "results/DEA/ASC_Interaction_filtered.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+
+ggplot(data = res, aes(x = sca.P.Value)) + 
+  geom_histogram(binwidth = 0.025)
+
+```
+
+```{r}
+
+plot_heatmap(data.sig, heatmap.colors, list(Celltype=c("ASC_WT" = "lightblue",
+                                                       "ASC_TLR10_LOV" = "lightgreen"),
+                                            Condition=c("Light" = "orange",
+                                                        "Dark" = "midnightblue")),
+             qvalues = qvals.sig, title = "Rel. LogIntensity", max_rows = hm_max_rows, cluster_rows = hm_cluster_rows,
+             cluster_cols = hm_cluster_cols, scale_by_row = hm_scale_by_row)
+
+```
+
+```{r}
+
+plot_volcano(res, "ASC Interaction", vp_lfc_limit, vp_max_labels)
+
+```
+
+
+## ADIPO ASC
+
+### Supernatant
+
+```{r}
+
+data <- read_DIA_report("data/MS1MS2/20240701_082311_ADIPO_ASC_SN_TLR10_Light_Report.tsv")
+
+data_MS1.df <- assay(data, "MS1") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+data_MS2.df <- assay(data, "MS2") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+```
+
+```{r}
+
+plot_missing(data_MS1.df, data_MS2.df)
+
+```
+
+```{r}
+
+keep <- filter_too_many_missing(data_MS1.df, data_MS2.df)
+
+data.filtered <- data[rownames(data) %in% keep,]
+
+
+data_MS1.filtered.df <- assay(data.filtered, "MS1") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+data_MS2.filtered.df <- assay(data.filtered, "MS2") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+```
+
+
+```{r}
+
+plot_missing(data_MS1.filtered.df, data_MS2.filtered.df)
+
+```
+
+```{r}
+
+data.log2 <- data.filtered
+assays(data.log2) %<>% lapply(log2)
+
+data_MS1.log2.df <- assay(data.log2, "MS1") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+data_MS2.log2.df <- assay(data.log2, "MS2") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+
+plot_intensity_boxplot(data_MS1.log2.df, data_MS2.log2.df)
+
+```
+
+
+```{r}
+
+data.norm <- data.log2
+assays(data.norm) %<>% lapply(normalize_matrix, "diff.median")
 
 data_MS1.norm.df <- assay(data.norm, "MS1") %>%
   as.data.frame() %>%
@@ -147,7 +1039,441 @@ plot_pca(data.imputed)
 
 ```
 
+```{r}
 
+
+contrast_list <- c(
+  LightVsDarkInWT = "ADIPO_ASC_WT.Light - ADIPO_ASC_WT.Dark", 
+  LightVsDarkInTLR10 = "ADIPO_ASC_TLR10_LOV.Light - ADIPO_ASC_TLR10_LOV.Dark",
+  TLR10VsWTInDark = "ADIPO_ASC_TLR10_LOV.Dark - ADIPO_ASC_WT.Dark",
+  TLR10VsWTInLight = "ADIPO_ASC_TLR10_LOV.Light - ADIPO_ASC_WT.Light",
+  Diff = "(ADIPO_ASC_TLR10_LOV.Light - ADIPO_ASC_TLR10_LOV.Dark) - (ADIPO_ASC_WT.Light - ADIPO_ASC_WT.Dark)"
+)
+
+fit <- fit_DEqMS_model(data.imputed, contrast_list)
+
+VarianceBoxplot(fit)
+
+```
+
+```{r}
+
+heatmap.annotation.col <- colData(data.imputed) %>% 
+  as.data.frame() %>%
+  dplyr::select(Cell.Type, Condition)
+
+```
+
+### ADIPO_ASC Wildtype Light vs. Dark
+
+```{r}
+
+current_contrast <- 1
+res <- outputResult(fit, coef_col = current_contrast) %>%
+  as_tibble() %>%
+  mutate(qvalue = qvalue(P.Value)$qvalues,
+         sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
+  select(!c(adj.P.Val, sca.adj.pval))
+
+res.sig <- res %>%
+  filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
+
+qvals.sig <- res.sig$sca.qvalue
+names(qvals.sig) <- res.sig$gene
+
+data.sig <- data.imputed[rownames(data.imputed) %in% res.sig$gene, 
+                         str_detect(colnames(data.imputed), "WT")]
+
+data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
+  
+
+write.csv(res, file = "results/DEA/ADIPO_ASC_WT_Light_vs_Dark_unfiltered.csv",
+          row.names = FALSE)
+
+write.csv(res.sig, file = "results/DEA/ADIPO_ASC_WT_Light_vs_Dark_filtered.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+
+ggplot(data = res, aes(x = sca.P.Value)) + 
+  geom_histogram(binwidth = 0.025)
+
+```
+
+```{r}
+
+plot_heatmap(data.sig, heatmap.colors, list(Celltype=c("ADIPO_ASC_WT" = "lightblue",
+                                                       "ADIPO_ASC_TLR10_LOV" = "lightgreen"),
+                                            Condition=c("Light" = "orange",
+                                                        "Dark" = "midnightblue")),
+             qvalues = qvals.sig, title = "Rel. LogIntensity", max_rows = hm_max_rows, cluster_rows = hm_cluster_rows,
+             cluster_cols = hm_cluster_cols, scale_by_row = hm_scale_by_row)
+
+```
+
+```{r}
+
+plot_volcano(res, "ADIPO ASC Wildtype Light vs. Dark", vp_lfc_limit, vp_max_labels)
+
+```
+
+
+### ADIPO_ASC TLR10LOV Light vs. Dark
+
+```{r}
+
+current_contrast <- 2
+res <- outputResult(fit, coef_col = current_contrast) %>%
+  as_tibble() %>%
+  mutate(qvalue = qvalue(P.Value)$qvalues,
+         sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
+  select(!c(adj.P.Val, sca.adj.pval))
+
+res.sig <- res %>%
+  filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
+
+qvals.sig <- res.sig$sca.qvalue
+names(qvals.sig) <- res.sig$gene
+
+data.sig <- data.imputed[rownames(data.imputed) %in% res.sig$gene, 
+                         str_detect(colnames(data.imputed), "TLR10_LOV")]
+
+data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
+  
+
+write.csv(res, file = "results/DEA/ADIPO_ASC_TLR10LOV_Light_vs_Dark_unfiltered.csv",
+          row.names = FALSE)
+
+write.csv(res.sig, file = "results/DEA/ADIPO_ASC_TLR10LOV_Light_vs_Dark_filtered.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+
+ggplot(data = res, aes(x = sca.P.Value)) + 
+  geom_histogram(binwidth = 0.025)
+
+```
+
+```{r}
+
+plot_heatmap(data.sig, heatmap.colors, list(Celltype=c("ADIPO_ASC_WT" = "lightblue",
+                                                       "ADIPO_ASC_TLR10_LOV" = "lightgreen"),
+                                            Condition=c("Light" = "orange",
+                                                        "Dark" = "midnightblue")),
+             qvalues = qvals.sig, title = "Rel. LogIntensity", max_rows = hm_max_rows, cluster_rows = hm_cluster_rows,
+             cluster_cols = hm_cluster_cols, scale_by_row = hm_scale_by_row)
+
+```
+
+```{r}
+
+plot_volcano(res, "ADIPO_ASC TLR10LOV Light vs. Dark", vp_lfc_limit, vp_max_labels)
+
+```
+
+
+### ADIPO_ASC TLR10LOV vs. Wildtype Dark
+
+```{r}
+
+current_contrast <- 3
+res <- outputResult(fit, coef_col = current_contrast) %>%
+  as_tibble() %>%
+  mutate(qvalue = qvalue(P.Value)$qvalues,
+         sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
+  select(!c(adj.P.Val, sca.adj.pval))
+
+res.sig <- res %>%
+  filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
+
+qvals.sig <- res.sig$sca.qvalue
+names(qvals.sig) <- res.sig$gene
+
+data.sig <- data.imputed[rownames(data.imputed) %in% res.sig$gene, 
+                         str_detect(colnames(data.imputed), "Dark")]
+
+data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
+  
+
+write.csv(res, file = "results/DEA/ADIPO_ASC_WT_vs_TLR10LOV_Dark_unfiltered.csv",
+          row.names = FALSE)
+
+write.csv(res.sig, file = "results/DEA/ADIPO_ASC_WT_vs_TLR10LOV_Dark_filtered.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+
+ggplot(data = res, aes(x = sca.P.Value)) + 
+  geom_histogram(binwidth = 0.025)
+
+```
+
+```{r}
+
+plot_heatmap(data.sig, heatmap.colors, list(Celltype=c("ADIPO_ASC_WT" = "lightblue",
+                                                       "ADIPO_ASC_TLR10_LOV" = "lightgreen"),
+                                            Condition=c("Light" = "orange",
+                                                        "Dark" = "midnightblue")),
+             qvalues = qvals.sig, title = "Rel. LogIntensity", max_rows = hm_max_rows, cluster_rows = hm_cluster_rows,
+             cluster_cols = hm_cluster_cols, scale_by_row = hm_scale_by_row)
+
+```
+
+```{r}
+
+plot_volcano(res, "ADIPO_ASC TLR10LOV vs. Wildtype Dark", vp_lfc_limit, vp_max_labels)
+
+```
+
+
+### ADIPO_ASC TLR10LOV vs. Wildtype Light
+
+```{r}
+
+current_contrast <- 4
+res <- outputResult(fit, coef_col = current_contrast) %>%
+  as_tibble() %>%
+  mutate(qvalue = qvalue(P.Value)$qvalues,
+         sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
+  select(!c(adj.P.Val, sca.adj.pval))
+
+res.sig <- res %>%
+  filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
+
+qvals.sig <- res.sig$sca.qvalue
+names(qvals.sig) <- res.sig$gene
+
+data.sig <- data.imputed[rownames(data.imputed) %in% res.sig$gene, 
+                         str_detect(colnames(data.imputed), "Light")]
+
+data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
+  
+
+write.csv(res, file = "results/DEA/ADIPO_ASC_WT_vs_TLR10LOV_Light_unfiltered.csv",
+          row.names = FALSE)
+
+write.csv(res.sig, file = "results/DEA/ADIPO_ASC_WT_vs_TLR10LOV_Light_filtered.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+
+ggplot(data = res, aes(x = sca.P.Value)) + 
+  geom_histogram(binwidth = 0.025)
+
+```
+
+```{r}
+
+plot_heatmap(data.sig, heatmap.colors, list(Celltype=c("ADIPO_ASC_WT" = "lightblue",
+                                                       "ADIPO_ASC_TLR10_LOV" = "lightgreen"),
+                                            Condition=c("Light" = "orange",
+                                                        "Dark" = "midnightblue")),
+             qvalues = qvals.sig, title = "Rel. LogIntensity", max_rows = hm_max_rows, cluster_rows = hm_cluster_rows,
+             cluster_cols = hm_cluster_cols, scale_by_row = hm_scale_by_row)
+
+```
+
+```{r}
+
+plot_volcano(res, "ADIPO_ASC TLR10LOV vs. Wildtype Light", vp_lfc_limit, vp_max_labels)
+
+```
+
+
+### ADIPO_ASC Interaction TLR10LOV vs. WT & Light vs. Dark
+
+```{r}
+
+current_contrast <- 5
+res <- outputResult(fit, coef_col = current_contrast) %>%
+  as_tibble() %>%
+  mutate(qvalue = qvalue(P.Value)$qvalues,
+         sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
+  select(!c(adj.P.Val, sca.adj.pval))
+
+res.sig <- res %>%
+  filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
+
+qvals.sig <- res.sig$sca.qvalue
+names(qvals.sig) <- res.sig$gene
+
+data.sig <- data.imputed[rownames(data.imputed) %in% res.sig$gene, ]
+
+data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
+  
+
+write.csv(res, file = "results/DEA/ADIPO_ASC_Interaction_unfiltered.csv",
+          row.names = FALSE)
+
+write.csv(res.sig, file = "results/DEA/ADIPO_ASC_Interaction_filtered.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+
+ggplot(data = res, aes(x = sca.P.Value)) + 
+  geom_histogram(binwidth = 0.025)
+
+```
+
+```{r}
+
+plot_heatmap(data.sig, heatmap.colors, list(Celltype=c("ADIPO_ASC_WT" = "lightblue",
+                                                       "ADIPO_ASC_TLR10_LOV" = "lightgreen"),
+                                            Condition=c("Light" = "orange",
+                                                        "Dark" = "midnightblue")),
+             qvalues = qvals.sig, title = "Rel. LogIntensity", max_rows = hm_max_rows, cluster_rows = hm_cluster_rows,
+             cluster_cols = hm_cluster_cols, scale_by_row = hm_scale_by_row)
+
+```
+
+```{r}
+
+plot_volcano(res, "ADIPO_ASC Interaction", vp_lfc_limit, vp_max_labels)
+
+```
+
+
+### Whole Cell Lysate
+
+```{r}
+
+data <- read_DIA_report("data/MS1MS2/20240626_081714_ADIPO_ASC_WCL_TLR10_Light_Report.tsv")
+
+data_MS1.df <- assay(data, "MS1") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+data_MS2.df <- assay(data, "MS2") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+```
+
+```{r}
+
+plot_missing(data_MS1.df, data_MS2.df)
+
+```
+
+```{r}
+
+keep <- filter_too_many_missing(data_MS1.df, data_MS2.df)
+
+data.filtered <- data[rownames(data) %in% keep,]
+
+
+data_MS1.filtered.df <- assay(data.filtered, "MS1") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+data_MS2.filtered.df <- assay(data.filtered, "MS2") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+```
+
+
+```{r}
+
+plot_missing(data_MS1.filtered.df, data_MS2.filtered.df)
+
+```
+
+```{r}
+
+data.log2 <- data.filtered
+assays(data.log2) %<>% lapply(log2)
+
+data_MS1.log2.df <- assay(data.log2, "MS1") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+data_MS2.log2.df <- assay(data.log2, "MS2") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+
+plot_intensity_boxplot(data_MS1.log2.df, data_MS2.log2.df)
+
+```
+
+
+```{r}
+
+data.norm <- data.log2
+assays(data.norm) %<>% lapply(normalize_matrix, "diff.median")
+
+data_MS1.norm.df <- assay(data.norm, "MS1") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+data_MS2.norm.df <- assay(data.norm, "MS2") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+plot_intensity_boxplot(data_MS1.norm.df, data_MS2.norm.df)
+
+```
+
+```{r}
+
+MNAR_MS1 <- get_MNAR(data_MS1.norm.df)
+MNAR_MS2 <- get_MNAR(data_MS2.norm.df)
+MNAR <- MNAR_MS1 | MNAR_MS2
+
+plot_missing_heatmap(data_MS1.norm.df, data_MS2.norm.df, MNAR, colData(data.norm),
+                     colors_columns = list(Celltype=c("ADIPO_ASC_WT" = "lightblue",
+                                                      "ADIPO_ASC_TLR10_LOV" = "lightgreen"),
+                                           Condition=c("Light" = "orange",
+                                                       "Dark" = "midnightblue")),
+                     colors_rows = list(MNAR=c("TRUE"="darkgreen",
+                                               "FALSE"="darkmagenta")))
+
+```
+
+```{r}
+
+plot_missing_density(data_MS1.norm.df, data_MS2.norm.df)
+
+```
+
+
+```{r}
+
+data.imputed <- data.norm
+
+assays(data.imputed) %<>% lapply(MsCoreUtils::impute_mixed, !MNAR, "MLE", "min")
+
+data_MS1.imputed.df <- assay(data.imputed, "MS1") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+
+data_MS2.imputed.df <- assay(data.imputed, "MS2") %>%
+  as.data.frame() %>%
+  rownames_to_column("Gene.Name")
+  
+```
+
+```{r}
+
+plot_imputation_density(data.norm, data.imputed)
+
+```
+
+```{r}
+
+plot_pca(data.imputed)
+
+```
 
 ```{r}
 
@@ -166,24 +1492,6 @@ VarianceBoxplot(fit)
 
 ```
 
-```{r plot_settings}
-
-## Heatmaps
-
-hm_cluster_rows <- TRUE # Genes
-hm_cluster_cols <- TRUE # Samples
-hm_scale_by_row <- TRUE
-hm_max_rows <- 20
-
-heatmap.colors <- rev(brewer.pal(6, "RdBu")) # For possible color palettes, see 'brewer.pal.info'
-
-## Volcano plot
-
-vp_max_labels <- 100
-vp_lfc_limit <- NA
-
-```
-
 ```{r}
 
 heatmap.annotation.col <- colData(data.imputed) %>% 
@@ -192,259 +1500,280 @@ heatmap.annotation.col <- colData(data.imputed) %>%
 
 ```
 
-### ASC wildtype Light vs. Dark
+### ADIPO_ASC Wildtype Light vs. Dark
 
 ```{r}
 
 current_contrast <- 1
-res.ASC_WT <- outputResult(fit, coef_col = current_contrast) %>%
+res <- outputResult(fit, coef_col = current_contrast) %>%
   as_tibble() %>%
   mutate(qvalue = qvalue(P.Value)$qvalues,
          sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
   select(!c(adj.P.Val, sca.adj.pval))
 
-res.ASC_WT.sig <- res.ASC_WT %>%
+res.sig <- res %>%
   filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
 
-data.ASC_WT.sig <- data_MS2.imputed.df %>%
-  dplyr::select(c(Gene.Name, contains("WT"))) %>%
-  filter(Gene.Name %in% res.ASC_WT.sig$gene) %>%
-  column_to_rownames("Gene.Name")
+qvals.sig <- res.sig$sca.qvalue
+names(qvals.sig) <- res.sig$gene
+
+data.sig <- data.imputed[rownames(data.imputed) %in% res.sig$gene, 
+                         str_detect(colnames(data.imputed), "WT")]
+
+data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 
-write.csv(res.ASC_WT, file = "results/DEA/ASC_WT_Light_vs_Dark_unfiltered.csv",
+write.csv(res, file = "results/DEA/ADIPO_ASC_WT_Light_vs_Dark_unfiltered.csv",
           row.names = FALSE)
 
-write.csv(res.ASC_WT.sig, file = "results/DEA/ASC_WT_Light_vs_Dark_filtered.csv",
+write.csv(res.sig, file = "results/DEA/ADIPO_ASC_WT_Light_vs_Dark_filtered.csv",
           row.names = FALSE)
 
 ```
 
 ```{r}
 
-ggplot(data = res.ASC_WT, aes(x = sca.P.Value)) + 
+ggplot(data = res, aes(x = sca.P.Value)) + 
   geom_histogram(binwidth = 0.025)
 
 ```
 
 ```{r}
 
-hmap.annotation.row <- rowData(data.imputed) %>%
-  as.data.frame %>%
-  filter(rownames(.) %in% rownames(data.ASC_WT.sig))
-  
-hmap.annotation.col <- heatmap.annotation.col %>%
-  filter(rownames(.) %in% colnames(data.ASC_WT.sig))
-
-if (nrow(data.ASC_WT.sig) <= hm_max_rows) {
-  
-  pheatmap(as.matrix(data.ASC_WT.sig),
-         color = heatmap.colors,
-         cluster_rows = hm_cluster_rows,
-         cluster_cols = hm_cluster_cols,
-         annotation_col = hmap.annotation.col,
-         labels_row = hmap.annotation.row$Gene.Name,
-         scale = ifelse(hm_scale_by_row, "row", "none"))
-  
-} else {
-  pheatmap(as.matrix(data.ASC_WT.sig),
-         color = heatmap.colors,
-         cluster_rows = hm_cluster_rows,
-         cluster_cols = hm_cluster_cols,
-         annotation_col = hmap.annotation.col,
-         show_rownames = F,
-         scale = ifelse(hm_scale_by_row, "row", "none"))
-  
-  res.ASC_WT.top <- res.ASC_WT.sig %>%
-    arrange(sca.adj.pval) %>%
-    head(hm_max_rows)
-
-  data.ASC_WT.top <- data.ASC_WT.sig %>%
-    filter(rownames(.) %in% res.ASC_WT.top$gene)
-  
-  heatmap.annotation.row %<>%
-    filter(rownames(.) %in% rownames(quant_data.ASC_WT.top))
-  
-  pheatmap(as.matrix(quant_data.ASC_WT.top),
-           color = heatmap.colors,
-           cluster_rows = hm_cluster_rows,
-           cluster_cols = hm_cluster_cols,
-           annotation_col = hmap.annotation.col,
-           labels_row = hmap.annotation.row$GeneSymbol,
-           scale = ifelse(hm_scale_by_row, "row", "none"))
-
-}
+plot_heatmap(data.sig, heatmap.colors, list(Celltype=c("ADIPO_ASC_WT" = "lightblue",
+                                                       "ADIPO_ASC_TLR10_LOV" = "lightgreen"),
+                                            Condition=c("Light" = "orange",
+                                                        "Dark" = "midnightblue")),
+             qvalues = qvals.sig, title = "Rel. LogIntensity", max_rows = hm_max_rows, cluster_rows = hm_cluster_rows,
+             cluster_cols = hm_cluster_cols, scale_by_row = hm_scale_by_row)
 
 ```
 
 ```{r}
 
-res.ASC_WT.plot <- res.ASC_WT %>%
-  filter(!is.na(sca.qvalue)) %>%
-  arrange(sca.qvalue) %>%
-  rowwise() %>%
-  mutate(threshold = sca.qvalue < 0.05 & abs(logFC) > 0.58,
-         out_of_bounds = ifelse(is.na(vp_lfc_limit), 0, (abs(logFC) > vp_lfc_limit) * sign(logFC)),
-         logFC_capped = ifelse(out_of_bounds != 0, vp_lfc_limit * sign(logFC), logFC)) %>%
-  ungroup()
-
-if (is.na(vp_max_labels) || nrow(res.ASC_WT.sig) < vp_max_labels) {
-  res.ASC_WT.plot %<>% arrange(desc(threshold)) %>%
-    mutate(genelabels = ifelse(threshold, gene, ""))
-} else {
-  res.ASC_WT.plot %<>% arrange(desc(threshold), sca.qvalue) %>%
-    mutate(genelabels = ifelse(threshold & (row_number() <= vp_max_labels), gene, ""))
-}
-
-maxFC <- max(abs(res.ASC_WT.plot$logFC))
-if (!is.na(vp_lfc_limit) & vp_lfc_limit < maxFC) {
-  xlim <- vp_lfc_limit
-} else {
-  xlim <- maxFC * 1.04
-}
-
-ggplot(res.ASC_WT.plot, aes(x = logFC_capped, y = sca.qvalue)) +
-  geom_point(data = subset(res.ASC_WT.plot, out_of_bounds == 0), aes(colour=threshold), alpha = 0.5) +
-  geom_point(data = subset(res.ASC_WT.plot, out_of_bounds == -1), aes(colour=threshold), shape = "\u25c4", size=2) +
-  geom_point(data = subset(res.ASC_WT.plot, out_of_bounds == 1), aes(colour=threshold), shape = "\u25BA", size=2) +
-  geom_hline(yintercept = 0.05, linetype = 2) +
-  geom_vline(xintercept = c(-0.58, 0.58), linetype = 2) +
-  geom_text_repel(aes(label = genelabels), max.overlaps = 75) +
-  scale_x_continuous(breaks = scales::pretty_breaks(), limits = c(-xlim, xlim), expand = expansion(0.01)) +
-  scale_y_continuous(trans = c("log10", "reverse"), breaks = scales::trans_breaks("log10", function(x) 10^x)) +
-  ggtitle("ADIPO ASC wildtype light vs dark") +
-  xlab("log2 Fold Change") +
-  ylab("q-value") +
-  theme_publish() +
-  theme(legend.position = "none")
+plot_volcano(res, "ADIPO_ASC Wildtype Light vs. Dark", vp_lfc_limit, vp_max_labels)
 
 ```
 
 
-### ASC TLR10LOV Light vs. Dark
+### ADIPO_ASC TLR10LOV Light vs. Dark
 
 ```{r}
 
 current_contrast <- 2
-res.ASC_TLR10LOV <- outputResult(fit, coef_col = current_contrast) %>%
+res <- outputResult(fit, coef_col = current_contrast) %>%
   as_tibble() %>%
   mutate(qvalue = qvalue(P.Value)$qvalues,
          sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
-  dplyr::select(!c(adj.P.Val, sca.adj.pval))
+  select(!c(adj.P.Val, sca.adj.pval))
 
-res.ASC_TLR10LOV.sig <- res.ASC_TLR10LOV %>%
+res.sig <- res %>%
   filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
 
-data.ASC_TLR10LOV.sig <- data_MS2.imputed.df %>%
-  dplyr::select(c(Gene.Name, contains("TLR10LOV"))) %>%
-  filter(Gene.Name %in% res.ASC_TLR10LOV.sig$gene) %>%
-  column_to_rownames("Gene.Name")
+qvals.sig <- res.sig$sca.qvalue
+names(qvals.sig) <- res.sig$gene
+
+data.sig <- data.imputed[rownames(data.imputed) %in% res.sig$gene, 
+                         str_detect(colnames(data.imputed), "TLR10_LOV")]
+
+data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 
-write.csv(res.ASC_TLR10LOV, file = "results/DEA/ASC_TLR10LOV_Light_vs_Dark_unfiltered.csv",
+write.csv(res, file = "results/DEA/ADIPO_ASC_TLR10LOV_Light_vs_Dark_unfiltered.csv",
           row.names = FALSE)
 
-write.csv(res.ASC_TLR10LOV.sig, file = "results/DEA/ASC_TLR10LOV_Light_vs_Dark_filtered.csv",
+write.csv(res.sig, file = "results/DEA/ADIPO_ASC_TLR10LOV_Light_vs_Dark_filtered.csv",
           row.names = FALSE)
 
 ```
 
 ```{r}
 
-ggplot(data = res.ASC_TLR10LOV, aes(x = sca.P.Value)) + 
+ggplot(data = res, aes(x = sca.P.Value)) + 
   geom_histogram(binwidth = 0.025)
 
 ```
 
 ```{r}
 
-hmap.annotation.row <- rowData(data.imputed) %>%
-  as.data.frame %>%
-  filter(rownames(.) %in% rownames(data.ASC_TLR10LOV.sig))
-  
-hmap.annotation.col <- heatmap.annotation.col %>%
-  filter(rownames(.) %in% colnames(data.ASC_TLR10LOV.sig))
-
-if (nrow(data.ASC_TLR10LOV.sig) <= hm_max_rows) {
-  
-  pheatmap(as.matrix(data.ASC_TLR10LOV.sig),
-         color = heatmap.colors,
-         cluster_rows = hm_cluster_rows,
-         cluster_cols = hm_cluster_cols,
-         annotation_col = hmap.annotation.col,
-         labels_row = hmap.annotation.row$Gene.Name,
-         scale = ifelse(hm_scale_by_row, "row", "none"))
-  
-} else {
-  pheatmap(as.matrix(data.ASC_TLR10LOV.sig),
-         color = heatmap.colors,
-         cluster_rows = hm_cluster_rows,
-         cluster_cols = hm_cluster_cols,
-         annotation_col = hmap.annotation.col,
-         show_rownames = F,
-         scale = ifelse(hm_scale_by_row, "row", "none"))
-  
-  res.ASC_TLR10LOV.top <- res.ASC_TLR10LOV.sig %>%
-    arrange(sca.adj.pval) %>%
-    head(hm_max_rows)
-
-  data.ASC_TLR10LOV.top <- data.ASC_TLR10LOV.sig %>%
-    filter(rownames(.) %in% res.ASC_TLR10LOV.top$gene)
-  
-  heatmap.annotation.row %<>%
-    filter(rownames(.) %in% rownames(quant_data.ASC_TLR10LOV.top))
-  
-  pheatmap(as.matrix(quant_data.ASC_TLR10LOV.top),
-           color = heatmap.colors,
-           cluster_rows = hm_cluster_rows,
-           cluster_cols = hm_cluster_cols,
-           annotation_col = hmap.annotation.col,
-           labels_row = hmap.annotation.row$GeneSymbol,
-           scale = ifelse(hm_scale_by_row, "row", "none"))
-
-}
+plot_heatmap(data.sig, heatmap.colors, list(Celltype=c("ADIPO_ASC_WT" = "lightblue",
+                                                       "ADIPO_ASC_TLR10_LOV" = "lightgreen"),
+                                            Condition=c("Light" = "orange",
+                                                        "Dark" = "midnightblue")),
+             qvalues = qvals.sig, title = "Rel. LogIntensity", max_rows = hm_max_rows, cluster_rows = hm_cluster_rows,
+             cluster_cols = hm_cluster_cols, scale_by_row = hm_scale_by_row)
 
 ```
 
 ```{r}
 
-res.ASC_TLR10LOV.plot <- res.ASC_TLR10LOV %>%
-  filter(!is.na(sca.qvalue)) %>%
-  arrange(sca.qvalue) %>%
-  rowwise() %>%
-  mutate(threshold = sca.qvalue < 0.05 & abs(logFC) > 0.58,
-         out_of_bounds = ifelse(is.na(vp_lfc_limit), 0, (abs(logFC) > vp_lfc_limit) * sign(logFC)),
-         logFC_capped = ifelse(out_of_bounds != 0, vp_lfc_limit * sign(logFC), logFC)) %>%
-  ungroup()
+plot_volcano(res, "ADIPO_ASC TLR10LOV Light vs. Dark", vp_lfc_limit, vp_max_labels)
 
-if (is.na(vp_max_labels) || nrow(res.ASC_TLR10LOV.sig) < vp_max_labels) {
-  res.ASC_TLR10LOV.plot %<>% arrange(desc(threshold)) %>%
-    mutate(genelabels = ifelse(threshold, gene, ""))
-} else {
-  res.ASC_TLR10LOV.plot %<>% arrange(desc(threshold), sca.qvalue) %>%
-    mutate(genelabels = ifelse(threshold & (row_number() <= vp_max_labels), gene, ""))
-}
+```
 
-maxFC <- max(abs(res.ASC_TLR10LOV.plot$logFC))
-if (!is.na(vp_lfc_limit) & vp_lfc_limit < maxFC) {
-  xlim <- vp_lfc_limit
-} else {
-  xlim <- maxFC * 1.04
-}
 
-ggplot(res.ASC_TLR10LOV.plot, aes(x = logFC_capped, y = sca.qvalue)) +
-  geom_point(data = subset(res.ASC_TLR10LOV.plot, out_of_bounds == 0), aes(colour=threshold), alpha = 0.5) +
-  geom_point(data = subset(res.ASC_TLR10LOV.plot, out_of_bounds == -1), aes(colour=threshold), shape = "\u25c4", size=2) +
-  geom_point(data = subset(res.ASC_TLR10LOV.plot, out_of_bounds == 1), aes(colour=threshold), shape = "\u25BA", size=2) +
-  geom_hline(yintercept = 0.05, linetype = 2) +
-  geom_vline(xintercept = c(-0.58, 0.58), linetype = 2) +
-  geom_text_repel(aes(label = genelabels), max.overlaps = 75) +
-  scale_x_continuous(breaks = scales::pretty_breaks(), limits = c(-xlim, xlim), expand = expansion(0.01)) +
-  scale_y_continuous(trans = c("log10", "reverse"), breaks = scales::trans_breaks("log10", function(x) 10^x)) +
-  ggtitle("ADIPO ASC wildtype light vs dark") +
-  xlab("log2 Fold Change") +
-  ylab("q-value") +
-  theme_publish() +
-  theme(legend.position = "none")
+### ADIPO_ASC TLR10LOV vs. Wildtype Dark
+
+```{r}
+
+current_contrast <- 3
+res <- outputResult(fit, coef_col = current_contrast) %>%
+  as_tibble() %>%
+  mutate(qvalue = qvalue(P.Value)$qvalues,
+         sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
+  select(!c(adj.P.Val, sca.adj.pval))
+
+res.sig <- res %>%
+  filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
+
+qvals.sig <- res.sig$sca.qvalue
+names(qvals.sig) <- res.sig$gene
+
+data.sig <- data.imputed[rownames(data.imputed) %in% res.sig$gene, 
+                         str_detect(colnames(data.imputed), "Dark")]
+
+data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
+  
+
+write.csv(res, file = "results/DEA/ADIPO_ASC_WT_vs_TLR10LOV_Dark_unfiltered.csv",
+          row.names = FALSE)
+
+write.csv(res.sig, file = "results/DEA/ADIPO_ASC_WT_vs_TLR10LOV_Dark_filtered.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+
+ggplot(data = res, aes(x = sca.P.Value)) + 
+  geom_histogram(binwidth = 0.025)
+
+```
+
+```{r}
+
+plot_heatmap(data.sig, heatmap.colors, list(Celltype=c("ADIPO_ASC_WT" = "lightblue",
+                                                       "ADIPO_ASC_TLR10_LOV" = "lightgreen"),
+                                            Condition=c("Light" = "orange",
+                                                        "Dark" = "midnightblue")),
+             qvalues = qvals.sig, title = "Rel. LogIntensity", max_rows = hm_max_rows, cluster_rows = hm_cluster_rows,
+             cluster_cols = hm_cluster_cols, scale_by_row = hm_scale_by_row)
+
+```
+
+```{r}
+
+plot_volcano(res, "ADIPO_ASC TLR10LOV vs. Wildtype Dark", vp_lfc_limit, vp_max_labels)
+
+```
+
+
+### ADIPO_ASC TLR10LOV vs. Wildtype Light
+
+```{r}
+
+current_contrast <- 4
+res <- outputResult(fit, coef_col = current_contrast) %>%
+  as_tibble() %>%
+  mutate(qvalue = qvalue(P.Value)$qvalues,
+         sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
+  select(!c(adj.P.Val, sca.adj.pval))
+
+res.sig <- res %>%
+  filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
+
+qvals.sig <- res.sig$sca.qvalue
+names(qvals.sig) <- res.sig$gene
+
+data.sig <- data.imputed[rownames(data.imputed) %in% res.sig$gene, 
+                         str_detect(colnames(data.imputed), "Light")]
+
+data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
+  
+
+write.csv(res, file = "results/DEA/ADIPO_ASC_WT_vs_TLR10LOV_Light_unfiltered.csv",
+          row.names = FALSE)
+
+write.csv(res.sig, file = "results/DEA/ADIPO_ASC_WT_vs_TLR10LOV_Light_filtered.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+
+ggplot(data = res, aes(x = sca.P.Value)) + 
+  geom_histogram(binwidth = 0.025)
+
+```
+
+```{r}
+
+plot_heatmap(data.sig, heatmap.colors, list(Celltype=c("ADIPO_ASC_WT" = "lightblue",
+                                                       "ADIPO_ASC_TLR10_LOV" = "lightgreen"),
+                                            Condition=c("Light" = "orange",
+                                                        "Dark" = "midnightblue")),
+             qvalues = qvals.sig, title = "Rel. LogIntensity", max_rows = hm_max_rows, cluster_rows = hm_cluster_rows,
+             cluster_cols = hm_cluster_cols, scale_by_row = hm_scale_by_row)
+
+```
+
+```{r}
+
+plot_volcano(res, "ADIPO_ASC TLR10LOV vs. Wildtype Light", vp_lfc_limit, vp_max_labels)
+
+```
+
+
+### ADIPO_ASC Interaction TLR10LOV vs. WT & Light vs. Dark
+
+```{r}
+
+current_contrast <- 5
+res <- outputResult(fit, coef_col = current_contrast) %>%
+  as_tibble() %>%
+  mutate(qvalue = qvalue(P.Value)$qvalues,
+         sca.qvalue = qvalue(sca.P.Value)$qvalues) %>%
+  select(!c(adj.P.Val, sca.adj.pval))
+
+res.sig <- res %>%
+  filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
+
+qvals.sig <- res.sig$sca.qvalue
+names(qvals.sig) <- res.sig$gene
+
+data.sig <- data.imputed[rownames(data.imputed) %in% res.sig$gene, ]
+
+data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
+  
+
+write.csv(res, file = "results/DEA/ADIPO_ASC_Interaction_unfiltered.csv",
+          row.names = FALSE)
+
+write.csv(res.sig, file = "results/DEA/ADIPO_ASC_Interaction_filtered.csv",
+          row.names = FALSE)
+
+```
+
+```{r}
+
+ggplot(data = res, aes(x = sca.P.Value)) + 
+  geom_histogram(binwidth = 0.025)
+
+```
+
+```{r}
+
+plot_heatmap(data.sig, heatmap.colors, list(Celltype=c("ADIPO_ASC_WT" = "lightblue",
+                                                       "ADIPO_ASC_TLR10_LOV" = "lightgreen"),
+                                            Condition=c("Light" = "orange",
+                                                        "Dark" = "midnightblue")),
+             qvalues = qvals.sig, title = "Rel. LogIntensity", max_rows = hm_max_rows, cluster_rows = hm_cluster_rows,
+             cluster_cols = hm_cluster_cols, scale_by_row = hm_scale_by_row)
+
+```
+
+```{r}
+
+plot_volcano(res, "ADIPO_ASC Interaction", vp_lfc_limit, vp_max_labels)
 
 ```
