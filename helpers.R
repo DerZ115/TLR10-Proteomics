@@ -2,7 +2,7 @@
 libraries <- c("tidyverse", "magrittr", "readxl", "stringr","MSstats", 
                "SummarizedExperiment", "MsCoreUtils", "DEqMS", "qvalue", "ggrepel",
                "janitor", "ComplexHeatmap", "envalysis", "RColorBrewer", 
-               "patchwork", "circlize")
+               "patchwork", "circlize", "vsn", "ggforce")
 
 lapply(libraries, library, character.only = TRUE)
 
@@ -31,13 +31,15 @@ read_DIA_report <- function(path) {
   column_to_rownames("Gene.Name")
   
   quant_data_MS1 <- data %>% 
-    select(matches("^(?:ADIPO_|OSTEO_)?ASC_(?:WT|TLR10_LOV)_(?:SN|WCL)_(?:Dark|Light)_\\d+_MS1$")) %>%
-    set_colnames(str_remove(colnames(.), "_MS1$")) %>%
+    select(matches("^(?:ADIPO_|OSTEO_)?ASC_(?:TERT_)?(?:WT|TLR10_LOV|TLR4_LOV)_(?:SN|WCL)_(?:Dark|Light|LPS)_\\d+(?:_\\d{8,})?_MS1$")) %>%
+    set_colnames(str_remove(colnames(.), "_MS1$") %>%
+                   str_remove("_\\d{8,}")) %>%
     as.matrix()
   
   quant_data_MS2 <- data %>% 
-    select(matches("^(?:ADIPO_|OSTEO_)?ASC_(?:WT|TLR10_LOV)_(?:SN|WCL)_(?:Dark|Light)_\\d+_MS2$")) %>%
-    set_colnames(str_remove(colnames(.), "_MS2$")) %>%
+    select(matches("^(?:ADIPO_|OSTEO_)?ASC_(?:TERT_)?(?:WT|TLR10_LOV|TLR4_LOV)_(?:SN|WCL)_(?:Dark|Light|LPS)_\\d+(?:_\\d{8,})?_MS2$")) %>%
+    set_colnames(str_remove(colnames(.), "_MS2$") %>%
+                   str_remove("_\\d{8,}")) %>%
     as.matrix()
   
   annotation_data <- data %>%
@@ -53,7 +55,7 @@ read_DIA_report <- function(path) {
                          cols_remove = FALSE) %>%
     column_to_rownames("Sample.Name") %>%
     mutate(Cell.Type = factor(Cell.Type, unique(Cell.Type)),
-           Condition = factor(Condition, c("Dark", "Light")))
+           Condition = factor(Condition, unique(Condition)))
   
   SummarizedExperiment(list(MS1 = quant_data_MS1, MS2 = quant_data_MS2), rowData = annotation_data, colData = sample_data)
 }
@@ -89,14 +91,14 @@ plot_missing <- function(MS1.df, MS2.df) {
 }
 
 
-filter_too_many_missing <- function(MS1.df, MS2.df) {
+filter_too_many_missing <- function(MS1.df, MS2.df, full.groups = 1) {
   keep1 <- MS1.df %>% pivot_longer(!Gene.Name, names_to = "Sample.Name", ) %>%
     mutate(value = !is.na(value), Sample.Name = str_remove(Sample.Name, "_\\d+$")) %>%
     group_by(Gene.Name, Sample.Name) %>%
     summarise(Group.Count = sum(value), .groups = "drop") %>%
     ungroup() %>%
     pivot_wider(names_from = Sample.Name, values_from = Group.Count) %>%
-    filter(if_any(everything(), ~ . == 3)) %>%
+    filter(rowSums(across(!Gene.Name, ~ . == 3)) >= full.groups) %>%
     pull(Gene.Name)
   
   keep2 <- MS2.df %>% pivot_longer(!Gene.Name, names_to = "Sample.Name", ) %>%
@@ -105,7 +107,7 @@ filter_too_many_missing <- function(MS1.df, MS2.df) {
     summarise(Group.Count = sum(value), .groups = "drop") %>%
     ungroup() %>%
     pivot_wider(names_from = Sample.Name, values_from = Group.Count) %>%
-    filter(if_any(everything(), ~ . == 3)) %>%
+    filter(rowSums(across(!Gene.Name, ~ . == 3)) >= full.groups) %>%
     pull(Gene.Name)
   
   intersect(keep1, keep2)
@@ -215,27 +217,25 @@ plot_missing_density <- function(MS1.df, MS2.df) {
     mutate(na_vals = rowSums(is.na(.)) > 0) %>%
     pivot_longer(!c(Gene.Name, na_vals), names_to = "Sample.Name", values_to = "Intensity") 
   
-  missing_values_density <- bind_rows(list(MS1=missing_values_density_MS1,
-                                           MS2=missing_values_density_MS2), 
+  missing_values_density <- bind_rows(list(missing_values_density_MS1,
+                                           missing_values_density_MS2), 
                                       .id = "MS") %>%
     na.omit()
   
-  p1 <- ggplot(missing_values_density, aes(x = Intensity, color = na_vals, linetype = MS)) +
+  p1 <- ggplot(missing_values_density, aes(x = Intensity, linetype = na_vals, color = MS)) +
     geom_density(linewidth = 1) +
-    labs(x = "Log2Intensity", y = "Density", color = "Has missing values") + 
-    scale_color_discrete(labels = c("No", "Yes")) +
-    scale_linetype_manual(values = c(MS1 = 2, MS2 = 1)) +
+    labs(x = "Log2Intensity", y = "Density") + 
+    scale_linetype_manual(values = c("FALSE" = 1, "TRUE" = 2), labels = c("No", "Yes")) +
     theme_publish() + 
     theme(axis.text.x = element_blank(),
           axis.title.x = element_blank(),
           legend.position = "none",
           panel.grid.major = element_line(linewidth = 0.5))
   
-  p2 <- ggplot(missing_values_density, aes(x = Intensity, color = na_vals, linetype = MS)) +
+  p2 <- ggplot(missing_values_density, aes(x = Intensity, linetype = na_vals, color = MS)) +
     stat_ecdf(linewidth = 1) +
-    labs(x = "Log2Intensity", y = "Cumulative Fraction", color = "Has missing values") + 
-    scale_color_discrete(labels = c("MS1:No", "MS2:No", "MS1:Yes", "MS2:Yes")) +
-    scale_linetype_manual(values = c(MS1 = 2, MS2 = 1)) +
+    labs(x = "Log2Intensity", y = "Cumulative Fraction", color = "MS", linetype = "Has missing values") + 
+    scale_linetype_manual(values = c("FALSE" = 1, "TRUE" = 2), labels = c("No", "Yes")) +
     theme_publish() +
     theme(panel.grid.major = element_line(linewidth = 0.5))
   
@@ -253,7 +253,7 @@ plot_imputation_density <- function(before, after) {
     lapply(as.data.frame) %>%
     lapply(rownames_to_column, var = "Gene.Name") %>% 
     bind_rows(.id = "MS") %>%
-    mutate(na_vals = rowSums(is.na(across(where(is.numeric)))) > 0) %>%
+    mutate(MS = as.factor(MS), na_vals = rowSums(is.na(across(where(is.numeric)))) > 0) %>%
     pivot_longer(!c(Gene.Name, MS, na_vals), names_to = "Sample.Name", values_to = "Intensity") %>%
     na.omit() %>%
     left_join(samples, by = "Sample.Name")
@@ -262,17 +262,16 @@ plot_imputation_density <- function(before, after) {
     lapply(as.data.frame) %>%
     lapply(rownames_to_column, var = "Gene.Name") %>%
     bind_rows(.id = "MS") %>%
-    mutate(na_vals = rowSums(is.na(across(where(is.numeric)))) > 0) %>%
+    mutate(MS = as.factor(MS), na_vals = rowSums(is.na(across(where(is.numeric)))) > 0) %>%
     pivot_longer(!c(Gene.Name, MS, na_vals), names_to = "Sample.Name", values_to = "Intensity") %>%
     left_join(samples, by = "Sample.Name")
   
   
-  p1 <- ggplot(before.plot, aes(x = Intensity, 
-                                color = interaction(Cell.Type, Condition, sep = ":"), 
-                                linetype = MS)) +
-    geom_density(linewidth = 1) +
-    scale_linetype_manual(values = c(MS1 = 2, MS2 = 1)) +
-    labs(title = "Before", x = "Log2Intensity", y = "Density", color = "Celltype:Condition") + 
+  p1 <- ggplot(before.plot, aes(x = Intensity,
+                                color = MS)) +
+    geom_density(aes(group = interaction(Cell.Type, Condition, sep = ":")),
+                 linewidth = 1) +
+    labs(title = "Before", x = "Log2Intensity", y = "Density", color = "MS") + 
     theme_publish() +
     theme(axis.text.x = element_blank(),
           axis.title.x = element_blank(),
@@ -280,11 +279,10 @@ plot_imputation_density <- function(before, after) {
           panel.grid.major = element_line(linewidth = 0.5))
   
   p2 <- ggplot(after.plot, aes(x = Intensity, 
-                               color = interaction(Cell.Type, Condition, sep = ":"),
-                               linetype = MS)) +
-    geom_density(linewidth = 1) +
-    scale_linetype_manual(values = c(MS1 = 2, MS2 = 1)) +
-    labs(title = "After", x = "Log2Intensity", y = "Density", color = "Celltype:Condition") + 
+                               color = MS)) +
+    geom_density(aes(group = interaction(Cell.Type, Condition, sep = ":")),
+                 linewidth = 1) +
+    labs(title = "After", x = "Log2Intensity", y = "Density", color = "MS") + 
     theme_publish() +
     theme(panel.grid.major = element_line(linewidth = 0.5))
   
@@ -292,7 +290,7 @@ plot_imputation_density <- function(before, after) {
 }
 
 
-plot_pca <- function(data) {
+plot_pca <- function(data, n = 500, maxPC = 2, center = TRUE, scale = TRUE, plot_all = F) {
   samples <- colData(data) %>% 
     as.data.frame() %>%
     rownames_to_column("Sample.Name")
@@ -306,17 +304,58 @@ plot_pca <- function(data) {
     column_to_rownames() %>%
     as.matrix() %>%
     t() %>%
-    prcomp() %$% x %>%
+    prcomp(center = center, scale. = scale) 
+  
+  data.pca.plot <- data.pca$x %>%
     as.data.frame() %>%
     rownames_to_column("Sample.Name") %>%
     left_join(samples, by = "Sample.Name")
   
-  ggplot(data.pca, aes(x = PC1, y = PC2, color = interaction(Cell.Type, Condition, sep = ":"))) +
-    geom_point() +
-    ggrepel::geom_text_repel(aes(label = Sample.Name), size=3) +
+  data.pca.var <- as.data.frame(t(summary(data.pca)$importance)) %>%
+    set_colnames(c("sd", "var_prop", "var_cumprop")) %>%
+    mutate(across(c(var_prop, var_cumprop), ~ .x * 100), Component = seq.int(1, nrow(.), 1))
+  
+  p1 <- ggplot(data.pca.var, aes(x = Component)) +
+    geom_bar(aes(y = var_prop), stat = "identity") +
+    geom_line(aes(y = var_cumprop)) +
+    geom_point(aes(y = var_cumprop)) +
+    scale_x_continuous(limits = c(0.5, nrow(data.pca.var) + 0.5), 
+                       breaks = seq(1, nrow(data.pca.var), by = 1),
+                       expand = expansion(add=0)) +
+    scale_y_continuous(expand = expansion(mult=c(0, 0.05))) +
+    ylab("Variance (%)") +
+    theme_publish() +
+    theme(panel.grid.major.y = element_line(linewidth = 0.5))
+  
+  print(p1)
+  
+  
+  p2 <- ggplot(data.pca.plot, aes(x = PC1, y = PC2, color = interaction(Cell.Type, Condition, sep = ":"),
+                             shape = Replicate)) +
+    geom_point(size = 3) +
     labs(color = "Celltype:Condition") +
     theme_publish() +
-    theme(panel.grid.major = element_line(linewidth = 0.5))
+    theme(panel.grid.major = element_line(linewidth = 0.5),
+          legend.position = "right")
+  
+  print(p2)
+
+  if (plot_all) {
+    
+    p3 <- ggplot(data.pca.plot, aes(color = interaction(Cell.Type, Condition, sep = ":"))) +
+      geom_autopoint(aes(shape = Replicate), size = 2) +
+      geom_autodensity(position = "identity", fill = NA) +
+      facet_matrix(vars(paste0("PC", seq.int(1, maxPC, 1))), layer.diag = 2) +
+      labs(color = "Celltype:Condition") +
+      theme_bw() +
+      theme(panel.grid.major = element_line(linewidth = 0.5))
+    
+    print(p3)
+  }
+    
+    
+    
+  
 }
 
 
@@ -362,13 +401,17 @@ plot_heatmap <- function(data.sig, color_scale, colors_columns, qvalues = NA,
     as.data.frame() %>%
     dplyr::select(Cell.Type, Condition)
   
+  data.hm <- Reduce("+", assays(data.sig)) / 2
+  
   if (scale_by_row) {
-    assays(data.sig) %<>%
-      lapply(function(x) t(scale(t(x))))
+    data.hm %<>%
+      t() %>%
+      scale() %>%
+      t()
   }
   
-  if (nrow(data.sig) <= max_rows) {
-    hm <- Heatmap(assay(data.sig, "MS2"), col = color_scale,  
+  if (nrow(data.hm) <= max_rows) {
+    hm <- Heatmap(data.hm, col = color_scale,  
                   name = title, cluster_rows = cluster_rows, 
                   show_row_dend = TRUE, show_column_names = FALSE, show_row_names = TRUE, 
                   row_title = NULL, column_title = NULL, cluster_columns = cluster_cols, 
@@ -379,7 +422,7 @@ plot_heatmap <- function(data.sig, color_scale, colors_columns, qvalues = NA,
     draw(hm)
   } else {
     
-    hm1 <- Heatmap(assay(data.sig, "MS2"), col = color_scale,  
+    hm1 <- Heatmap(data.hm, col = color_scale,  
                    name = title, cluster_rows = cluster_rows, 
                    show_row_dend = FALSE, show_column_names = FALSE, show_row_names = FALSE, 
                    row_title = NULL, column_title = NULL, cluster_columns = cluster_cols, 
@@ -387,13 +430,18 @@ plot_heatmap <- function(data.sig, color_scale, colors_columns, qvalues = NA,
                                                       Condition = hmap.annotation.col$Condition,
                                                       col = colors_columns))
     
-    data.top <- data.sig[names(sort(qvalues)),] %>%
-      head(max_rows)
+    data.top <- data.hm %>%
+      as.data.frame() %>%
+      mutate(qvalue = qvalues[rownames(data.hm)]) %>%
+      arrange(qvalue) %>%
+      head(max_rows) %>%
+      select(!qvalue) %>%
+      as.matrix()
     
     hmap.annotation.row %<>%
       filter(rownames(.) %in% rownames(data.top))
     
-    hm2 <- Heatmap(assay(data.top, "MS2"), col = color_scale,  
+    hm2 <- Heatmap(data.top, col = color_scale,  
                    name = title, cluster_rows = cluster_rows, 
                    show_row_dend = TRUE, show_column_names = FALSE, show_row_names = TRUE, 
                    row_title = NULL, column_title = NULL, cluster_columns = cluster_cols, 
@@ -406,7 +454,8 @@ plot_heatmap <- function(data.sig, color_scale, colors_columns, qvalues = NA,
   }
 }
 
-plot_volcano <- function(res, title = "", lfc_limit = NA, max_labels = NA) {
+
+plot_volcano <- function(res, title = "", lfc_limit = NA) {
   res.plot <- res %>%
     filter(!is.na(sca.qvalue)) %>%
     arrange(sca.qvalue) %>%
@@ -419,13 +468,10 @@ plot_volcano <- function(res, title = "", lfc_limit = NA, max_labels = NA) {
   res.sig <- res %>%
     filter(sca.qvalue < 0.05 & abs(logFC) >= 0.58)
   
-  if (is.na(max_labels) || nrow(res.sig) < max_labels) {
-    res.plot %<>% arrange(desc(threshold)) %>%
-      mutate(genelabels = ifelse(threshold, gene, ""))
-  } else {
-    res.plot %<>% arrange(desc(threshold), sca.qvalue) %>%
-      mutate(genelabels = ifelse(threshold & (row_number() <= max_labels), gene, ""))
-  }
+
+  res.plot %<>% 
+    mutate(genelabels = ifelse(threshold, gene, ""))
+
   
   maxFC <- max(abs(res.plot$logFC))
   if (!is.na(lfc_limit) && lfc_limit < maxFC) {

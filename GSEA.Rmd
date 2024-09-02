@@ -61,8 +61,7 @@ set.seed(5892)
 gseGO_BP.ASC_WT_Light_vs_Dark <- gseGO(gene_list.ASC_WT_Light_vs_Dark.entrez,
                                     ont = "BP",
                                     OrgDb = org.Hs.eg.db,
-                                    keyType = "ENTREZID",
-                                    pvalueCutoff = 1)
+                                    keyType = "ENTREZID")
 
 gseGO_BP.ASC_WT_Light_vs_Dark <- setReadable(gseGO_BP.ASC_WT_Light_vs_Dark, "org.Hs.eg.db", "ENTREZID")
 gseGO_BP.ASC_WT_Light_vs_Dark
