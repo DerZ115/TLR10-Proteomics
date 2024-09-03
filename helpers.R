@@ -488,7 +488,7 @@ plot_volcano <- function(res, title = "", lfc_limit = NA) {
     geom_vline(xintercept = c(-0.58, 0.58), linetype = 2) +
     geom_text_repel(aes(label = genelabels)) +
     scale_x_continuous(breaks = scales::pretty_breaks(), limits = c(-xlim, xlim), expand = expansion(0.01)) +
-    scale_y_continuous(trans = c("log10", "reverse"), breaks = scales::trans_breaks("log10", function(x) 10^x)) +
+    scale_y_continuous(trans = c("log10", "reverse"), breaks = scales::log_breaks(), labels = scales::scientific) +
     ggtitle(title) +
     xlab("log2 Fold Change") +
     ylab("q-value") +
