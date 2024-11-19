@@ -1,14 +1,41 @@
-
-libraries <- c("tidyverse", "magrittr", "readxl", "stringr","MSstats", 
-               "SummarizedExperiment", "MsCoreUtils", "DEqMS", "qvalue", "ggrepel",
-               "janitor", "ComplexHeatmap", "envalysis", "RColorBrewer", 
-               "patchwork", "circlize", "vsn", "ggforce")
+libraries <- c(
+  "tidyverse", "magrittr", "readxl", "stringr", "MSstats",
+  "SummarizedExperiment", "MsCoreUtils", "DEqMS", "qvalue", "ggrepel",
+  "janitor", "ComplexHeatmap", "envalysis", "RColorBrewer",
+  "patchwork", "circlize", "vsn", "ggforce"
+)
 
 lapply(libraries, library, character.only = TRUE)
 
 
+#' Read DIA Report
+#'
+#' This function reads a DIA (Data Independent Acquisition) report from a specified file path,
+#' processes the data, and returns a `SummarizedExperiment` object containing the MS1 and MS2
+#' quantification data, annotation data, and sample data.
+#'
+#' @param path A character string specifying the file path to the DIA report.
+#' @return A `SummarizedExperiment` object containing:
+#' \describe{
+#'   \item{MS1}{A matrix of MS1 quantification data.}
+#'   \item{MS2}{A matrix of MS2 quantification data.}
+#'   \item{rowData}{A data frame of annotations including protein names, protein groups, and peptide counts.}
+#'   \item{colData}{A data frame of sample data including cell type, condition, and replicate information.}
+#' }
+#' @import dplyr
+#' @import tidyr
+#' @import SummarizedExperiment
+#' @importFrom readr read_delim
+#' @importFrom stringr str_split_i str_remove str_replace
+#' @importFrom tibble column_to_rownames
+#' @export
+#'
+#' @examples
+#' # Example usage:
+#' # result <- read_DIA_report("path/to/DIA_report.txt")
 read_DIA_report <- function(path) {
-  data <- read.delim(path, header = TRUE, sep = "\t", dec = ",", na.strings = c("NaN", "NA", "")) %>%
+  data <- read.delim(path, header = TRUE, sep = "\t", 
+                     dec = ",", na.strings = c("NaN", "NA", "")) %>%
     mutate(PG.ProteinNames = str_split_i(PG.ProteinNames, ";", 1),
            PG.Genes = str_split_i(PG.Genes, ";", 1)) %>%
     select(c(PG.ProteinGroups,
@@ -61,6 +88,22 @@ read_DIA_report <- function(path) {
 }
 
 
+#' Plot Missing Values
+#'
+#' This function creates bar plots showing the count of missing values in MS1 and MS2 data frames.
+#'
+#' @param MS1.df A data frame containing MS1 quantification data.
+#' @param MS2.df A data frame containing MS2 quantification data.
+#' @return A combined plot of missing values for MS1 and MS2 data frames.
+#' @import dplyr
+#' @import ggplot2
+#' @import patchwork
+#' @export
+#'
+#' @examples
+#' # Example usage:
+#' # p <- plot_missing(MS1.df, MS2.df)
+#' # print(p)
 plot_missing <- function(MS1.df, MS2.df) {
   missing_values_MS1 <- MS1.df %>%
     mutate(na_vals = rowSums(is.na(.)))
@@ -91,6 +134,21 @@ plot_missing <- function(MS1.df, MS2.df) {
 }
 
 
+#' Filter Genes with Too Many Missing Values
+#'
+#' This function filters out genes/proteins that have too many missing values in both MS1 and MS2 data frames.
+#'
+#' @param MS1.df A data frame containing MS1 quantification data.
+#' @param MS2.df A data frame containing MS2 quantification data.
+#' @param full.groups An integer specifying the minimum number of sample groups required to keep a gene.
+#' @return A vector of gene names that pass the filter.
+#' @import dplyr
+#' @import tidyr
+#' @export
+#'
+#' @examples
+#' # Example usage:
+#' # filtered_genes <- filter_too_many_missing(MS1.df, MS2.df, full.groups = 1)
 filter_too_many_missing <- function(MS1.df, MS2.df, full.groups = 1) {
   keep1 <- MS1.df %>% pivot_longer(!Gene.Name, names_to = "Sample.Name", ) %>%
     mutate(value = !is.na(value), Sample.Name = str_remove(Sample.Name, "_\\d+$")) %>%
@@ -114,6 +172,22 @@ filter_too_many_missing <- function(MS1.df, MS2.df, full.groups = 1) {
 }
 
 
+#' Plot Intensity Boxplot
+#'
+#' This function creates boxplots of log2 intensities for MS1 and MS2 data frames.
+#'
+#' @param MS1.df A data frame containing MS1 quantification data.
+#' @param MS2.df A data frame containing MS2 quantification data.
+#' @return A combined plot of intensity boxplots for MS1 and MS2 data frames.
+#' @import dplyr
+#' @import ggplot2
+#' @import patchwork
+#' @export
+#'
+#' @examples
+#' # Example usage:
+#' # p <- plot_intensity_boxplot(MS1.df, MS2.df)
+#' # print(p)
 plot_intensity_boxplot <- function(MS1.df, MS2.df) {
   MS1.plot <- MS1.df %>%
     pivot_longer(!Gene.Name, names_to = "Sample", 
@@ -137,6 +211,20 @@ plot_intensity_boxplot <- function(MS1.df, MS2.df) {
 }
   
 
+#' Get MNAR Genes
+#'
+#' This function identifies genes that are missing not at random (MNAR) in the data frame. 
+#' It does this by checking if a gene/protein is not found in all replicates of a sample.
+#'
+#' @param df A data frame containing quantification data.
+#' @return A logical vector indicating whether each gene is MNAR.
+#' @import dplyr
+#' @import tidyr
+#' @export
+#'
+#' @examples
+#' # Example usage:
+#' # MNAR <- get_MNAR(df)
 get_MNAR <- function(df) {
   MNAR_genes <- df %>%
     pivot_longer(!Gene.Name, names_to = "Sample.Name") %>%
@@ -155,6 +243,25 @@ get_MNAR <- function(df) {
 }
 
 
+#' Plot Missing Values Heatmap
+#'
+#' This function creates a heatmap showing the missing values in MS1 and MS2 data frames.
+#'
+#' @param MS1.df A data frame containing MS1 quantification data.
+#' @param MS2.df A data frame containing MS2 quantification data.
+#' @param mnar A logical vector indicating whether each gene is MNAR.
+#' @param samples A data frame containing sample information.
+#' @param colors_rows A list of colors for row annotations.
+#' @param colors_columns A list of colors for column annotations.
+#' @return A heatmap of missing values.
+#' @import dplyr
+#' @import ComplexHeatmap
+#' @import circlize
+#' @export
+#'
+#' @examples
+#' # Example usage:
+#' # plot_missing_heatmap(MS1.df, MS2.df, mnar, samples)
 plot_missing_heatmap <- function(MS1.df, MS2.df, mnar, samples, colors_rows = NULL, colors_columns = NULL) {
   missing_values_MS1 <- MS1.df %>%
     set_colnames(colnames(.) %>% str_remove("_MS1$")) %>%
@@ -208,6 +315,22 @@ plot_missing_heatmap <- function(MS1.df, MS2.df, mnar, samples, colors_rows = NU
 }
 
 
+#' Plot Missing Values Density
+#'
+#' This function creates density plots showing the distribution of missing values in MS1 and MS2 data frames.
+#'
+#' @param MS1.df A data frame containing MS1 quantification data.
+#' @param MS2.df A data frame containing MS2 quantification data.
+#' @return A combined plot of missing values density for MS1 and MS2 data frames.
+#' @import dplyr
+#' @import ggplot2
+#' @import patchwork
+#' @export
+#'
+#' @examples
+#' # Example usage:
+#' # p <- plot_missing_density(MS1.df, MS2.df)
+#' # print(p)
 plot_missing_density <- function(MS1.df, MS2.df) {
   missing_values_density_MS1 <- MS1.df %>%
     mutate(na_vals = rowSums(is.na(.)) > 0) %>%
@@ -244,6 +367,23 @@ plot_missing_density <- function(MS1.df, MS2.df) {
 }
 
 
+#' Plot Imputation Density
+#'
+#' This function creates density plots comparing the intensity distributions before and after imputation.
+#'
+#' @param before A SummarizedExperiment object containing data before imputation.
+#' @param after A SummarizedExperiment object containing data after imputation.
+#' @return A combined plot of intensity density before and after imputation.
+#' @import dplyr
+#' @import ggplot2
+#' @import patchwork
+#' @import SummarizedExperiment
+#' @export
+#'
+#' @examples
+#' # Example usage:
+#' # p <- plot_imputation_density(before, after)
+#' # print(p)
 plot_imputation_density <- function(before, after) {
   samples <- colData(after) %>% 
     as.data.frame() %>% 
@@ -290,6 +430,26 @@ plot_imputation_density <- function(before, after) {
 }
 
 
+#' Plot PCA
+#'
+#' This function performs PCA on the data and creates PCA plots.
+#'
+#' @param data A SummarizedExperiment object containing quantification data.
+#' @param n An integer specifying the number of top variable genes to use for PCA.
+#' @param maxPC An integer specifying the maximum number of principal components to plot.
+#' @param center A logical value indicating whether to center the data.
+#' @param scale A logical value indicating whether to scale the data.
+#' @param plot_all A logical value indicating whether to plot all principal components.
+#' @return PCA plots.
+#' @import dplyr
+#' @import ggplot2
+#' @import patchwork
+#' @import SummarizedExperiment
+#' @export
+#'
+#' @examples
+#' # Example usage:
+#' # plot_pca(data, n = 500, maxPC = 2)
 plot_pca <- function(data, n = 500, maxPC = 2, center = TRUE, scale = TRUE, plot_all = F) {
   samples <- colData(data) %>% 
     as.data.frame() %>%
@@ -359,6 +519,22 @@ plot_pca <- function(data, n = 500, maxPC = 2, center = TRUE, scale = TRUE, plot
 }
 
 
+#' Fit DEqMS Model
+#'
+#' This function fits a limma & DEqMS model to the quantification data.
+#'
+#' @param data A SummarizedExperiment object containing quantification data.
+#' @param contrast_list A list of contrasts to test.
+#' @return A DEqMS model fit object.
+#' @import dplyr
+#' @import limma
+#' @import DEqMS
+#' @import SummarizedExperiment
+#' @export
+#'
+#' @examples
+#' # Example usage:
+#' # fit <- fit_DEqMS_model(data, contrast_list)
 fit_DEqMS_model <- function(data, contrast_list) {
   samples <- colData(data) %>%
     as.data.frame() %>%
@@ -391,6 +567,29 @@ fit_DEqMS_model <- function(data, contrast_list) {
 }
 
 
+#' Plot Heatmap
+#'
+#' This function creates a heatmap of significant proteins.
+#'
+#' @param data.sig A SummarizedExperiment object containing significant data.
+#' @param color_scale A color scale for the heatmap.
+#' @param colors_columns A list of colors for column annotations.
+#' @param qvalues A vector of q-values for the data.
+#' @param title A character string specifying the title of the heatmap.
+#' @param max_rows An integer specifying the maximum number of rows to display.
+#' @param cluster_rows A logical value indicating whether to cluster rows.
+#' @param cluster_cols A logical value indicating whether to cluster columns.
+#' @param scale_by_row A logical value indicating whether to scale data by row.
+#' @return A heatmap of significant data.
+#' @import dplyr
+#' @import ComplexHeatmap
+#' @import circlize
+#' @import SummarizedExperiment
+#' @export
+#'
+#' @examples
+#' # Example usage:
+#' # plot_heatmap(data.sig, color_scale, colors_columns)
 plot_heatmap <- function(data.sig, color_scale, colors_columns, qvalues = NA, 
                          title = NA, max_rows = 20, cluster_rows = TRUE, 
                          cluster_cols = TRUE, scale_by_row = TRUE) {
@@ -455,6 +654,22 @@ plot_heatmap <- function(data.sig, color_scale, colors_columns, qvalues = NA,
 }
 
 
+#' Plot Volcano
+#'
+#' This function creates a volcano plot of differential expression results.
+#'
+#' @param res A data frame containing differential expression results.
+#' @param title A character string specifying the title of the plot.
+#' @param lfc_limit A numeric value specifying the limit for log fold change.
+#' @return A volcano plot.
+#' @import dplyr
+#' @import ggplot2
+#' @import ggrepel
+#' @export
+#'
+#' @examples
+#' # Example usage:
+#' # plot_volcano(res, title = "Volcano Plot")
 plot_volcano <- function(res, title = "", lfc_limit = NA) {
   res.plot <- res %>%
     filter(!is.na(sca.qvalue)) %>%

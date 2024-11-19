@@ -1,0 +1,28 @@
+Package: TLR10-Proteomics
+Type: Package
+Title: TLR10 Proteomics Analysis
+Version: 1.0.0
+Author: Daniel Zimmermann
+Maintainer: Daniel Zimmermann <daniel.zimmermann@example.com>
+Description: This package provides functions and scripts for the analysis of TLR10 proteomics data, including data import, normalization, imputation, differential expression analysis, and visualization.
+License: MIT
+Imports: 
+    tidyverse,
+    magrittr,
+    readxl,
+    stringr,
+    MSstats,
+    SummarizedExperiment,
+    MsCoreUtils,
+    DEqMS,
+    qvalue,
+    ggrepel,
+    janitor,
+    ComplexHeatmap,
+    envalysis,
+    RColorBrewer,
+    patchwork,
+    circlize,
+    vsn,
+    ggforce
+RoxygenNote: 7.3.2

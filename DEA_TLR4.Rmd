@@ -12,7 +12,7 @@ output:
 
 ```{r setup, message=FALSE, warning=FALSE}
 
-source("helpers.R")
+source("R/helpers.R")
 
 dir.create("results/TLR4/DEA", showWarnings = F, recursive = T)
 
