@@ -14,7 +14,8 @@ output:
 
 source("R/helpers.R")
 
-dir.create("results/TLR4/DEA", showWarnings = F, recursive = T)
+results_dir <- "results/TLR4/DEA"
+dir.create(results_dir, showWarnings = F, recursive = T)
 
 knitr::opts_chunk$set(fig.width = 10, dpi = 300, results = "hold", fig.show = "hold")
 
@@ -140,10 +141,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
 
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/TLR4/DEA/ASC_TERT_TLR4LOV_Light_vs_Dark_SN_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, ASC_TERT_TLR4LOV_Light_vs_Dark_SN_unfiltered.csv),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/TLR4/DEA/ASC_TERT_TLR4LOV_Light_vs_Dark_SN_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, ASC_TERT_TLR4LOV_Light_vs_Dark_SN_filtered.csv),
           row.names = FALSE)
 
 ```
@@ -197,10 +198,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/TLR4/DEA/ASC_TERT_TLR4LOV_LPS_vs_Dark_SN_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, ASC_TERT_TLR4LOV_LPS_vs_Dark_SN_unfiltered.csv),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/TLR4/DEA/ASC_TERT_TLR4LOV_LPS_vs_Dark_SN_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, ASC_TERT_TLR4LOV_LPS_vs_Dark_SN_filtered.csv),
           row.names = FALSE)
 
 ```
@@ -253,10 +254,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/TLR4/DEA/ASC_TERT_TLR4LOV_Light_vs_LPS_SN_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, ASC_TERT_TLR4LOV_Light_vs_LPS_SN_unfiltered.csv),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/TLR4/DEA/ASC_TERT_TLR4LOV_Light_vs_LPS_SN_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, ASC_TERT_TLR4LOV_Light_vs_LPS_SN_filtered.csv),
           row.names = FALSE)
 
 ```
@@ -423,10 +424,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/TLR4/DEA/ASC_TERT_TLR4LOV_Light_vs_Dark_WCL_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, ASC_TERT_TLR4LOV_Light_vs_Dark_WCL_unfiltered.csv),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/TLR4/DEA/ASC_TERT_TLR4LOV_Light_vs_Dark_WCL_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, ASC_TERT_TLR4LOV_Light_vs_Dark_WCL_filtered.csv),
           row.names = FALSE)
 
 ```
@@ -479,10 +480,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/TLR4/DEA/ASC_TERT_TLR4LOV_LPS_vs_Dark_WCL_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, ASC_TERT_TLR4LOV_LPS_vs_Dark_WCL_unfiltered.csv),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/TLR4/DEA/ASC_TERT_TLR4LOV_LPS_vs_Dark_WCL_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, ASC_TERT_TLR4LOV_LPS_vs_Dark_WCL_filtered.csv),
           row.names = FALSE)
 
 ```
@@ -535,10 +536,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/TLR4/DEA/ASC_TERT_TLR4LOV_Light_vs_LPS_WCL_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, ASC_TERT_TLR4LOV_Light_vs_LPS_WCL_unfiltered.csv),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/TLR4/DEA/ASC_TERT_TLR4LOV_Light_vs_LPS_WCL_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, ASC_TERT_TLR4LOV_Light_vs_LPS_WCL_filtered.csv),
           row.names = FALSE)
 
 ```

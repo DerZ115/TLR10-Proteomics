@@ -14,7 +14,8 @@ output:
 
 source("R/helpers.R")
 
-dir.create("results/DEA", showWarnings = F, recursive = T)
+results_dir <- "results/TLR10/DEA"
+dir.create(results_dir, showWarnings = F, recursive = T)
 
 knitr::opts_chunk$set(fig.width = 10, dpi = 300, results = "hold", fig.show = "hold")
 
@@ -209,10 +210,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/ASC_WT_Light_vs_Dark_SN_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "ASC_WT_Light_vs_Dark_SN_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/ASC_WT_Light_vs_Dark_SN_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "ASC_WT_Light_vs_Dark_SN_filtered.csv"),
           row.names = FALSE)
 
 # TODO: LOV filtern, um Lichteffekte zu entfernen
@@ -269,10 +270,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/ASC_TLR10LOV_Light_vs_Dark_SN_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "ASC_TLR10LOV_Light_vs_Dark_SN_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/ASC_TLR10LOV_Light_vs_Dark_SN_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "ASC_TLR10LOV_Light_vs_Dark_SN_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -346,10 +347,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/ASC_TLR10LOV_vs_WT_Dark_SN_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "ASC_TLR10LOV_vs_WT_Dark_SN_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/ASC_TLR10LOV_vs_WT_Dark_SN_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "ASC_TLR10LOV_vs_WT_Dark_SN_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -404,10 +405,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/ASC_TLR10LOV_vs_WT_Light_SN_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "ASC_TLR10LOV_vs_WT_Light_SN_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/ASC_TLR10LOV_vs_WT_Light_SN_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "ASC_TLR10LOV_vs_WT_Light_SN_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -461,10 +462,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/ASC_Interaction_SN_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "ASC_Interaction_SN_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/ASC_Interaction_SN_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "ASC_Interaction_SN_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -665,10 +666,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
 
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/ASC_WT_Light_vs_Dark_WCL_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "ASC_WT_Light_vs_Dark_WCL_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/ASC_WT_Light_vs_Dark_WCL_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "ASC_WT_Light_vs_Dark_WCL_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -723,10 +724,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/ASC_TLR10LOV_Light_vs_Dark_WCL_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "ASC_TLR10LOV_Light_vs_Dark_WCL_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/ASC_TLR10LOV_Light_vs_Dark_WCL_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "ASC_TLR10LOV_Light_vs_Dark_WCL_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -798,10 +799,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/ASC_TLR10LOV_vs_WT_Dark_WCL_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "ASC_TLR10LOV_vs_WT_Dark_WCL_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/ASC_TLR10LOV_vs_WT_Dark_WCL_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "ASC_TLR10LOV_vs_WT_Dark_WCL_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -856,10 +857,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/ASC_TLR10LOV_vs_WT_Light_WCL_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "ASC_TLR10LOV_vs_WT_Light_WCL_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/ASC_TLR10LOV_vs_WT_Light_WCL_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "ASC_TLR10LOV_vs_WT_Light_WCL_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -913,10 +914,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/ASC_Interaction_WCL_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "ASC_Interaction_WCL_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/ASC_Interaction_WCL_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "ASC_Interaction_WCL_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -1117,10 +1118,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/ADIPO_ASC_WT_Light_vs_Dark_SN_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "ADIPO_ASC_WT_Light_vs_Dark_SN_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/ADIPO_ASC_WT_Light_vs_Dark_SN_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "ADIPO_ASC_WT_Light_vs_Dark_SN_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -1175,10 +1176,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/ADIPO_ASC_TLR10LOV_Light_vs_Dark_SN_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "ADIPO_ASC_TLR10LOV_Light_vs_Dark_SN_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/ADIPO_ASC_TLR10LOV_Light_vs_Dark_SN_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "ADIPO_ASC_TLR10LOV_Light_vs_Dark_SN_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -1233,10 +1234,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/ADIPO_ASC_TLR10LOV_vs_WT_Dark_SN_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "ADIPO_ASC_TLR10LOV_vs_WT_Dark_SN_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/ADIPO_ASC_TLR10LOV_vs_WT_Dark_SN_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "ADIPO_ASC_TLR10LOV_vs_WT_Dark_SN_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -1291,10 +1292,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/ADIPO_ASC_TLR10LOV_vs_WT_Light_SN_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "ADIPO_ASC_TLR10LOV_vs_WT_Light_SN_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/ADIPO_ASC_TLR10LOV_vs_WT_Light_SN_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "ADIPO_ASC_TLR10LOV_vs_WT_Light_SN_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -1348,10 +1349,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/ADIPO_ASC_Interaction_SN_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "ADIPO_ASC_Interaction_SN_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/ADIPO_ASC_Interaction_SN_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "ADIPO_ASC_Interaction_SN_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -1549,10 +1550,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/ADIPO_ASC_WT_Light_vs_Dark_WCL_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "ADIPO_ASC_WT_Light_vs_Dark_WCL_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/ADIPO_ASC_WT_Light_vs_Dark_WCL_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "ADIPO_ASC_WT_Light_vs_Dark_WCL_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -1607,10 +1608,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/ADIPO_ASC_TLR10LOV_Light_vs_Dark_WCL_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "ADIPO_ASC_TLR10LOV_Light_vs_Dark_WCL_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/ADIPO_ASC_TLR10LOV_Light_vs_Dark_WCL_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "ADIPO_ASC_TLR10LOV_Light_vs_Dark_WCL_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -1665,10 +1666,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/ADIPO_ASC_TLR10LOV_vs_WT_Dark_WCL_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "ADIPO_ASC_TLR10LOV_vs_WT_Dark_WCL_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/ADIPO_ASC_TLR10LOV_vs_WT_Dark_WCL_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "ADIPO_ASC_TLR10LOV_vs_WT_Dark_WCL_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -1723,10 +1724,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/ADIPO_ASC_TLR10LOV_vs_WT_Light_WCL_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "ADIPO_ASC_TLR10LOV_vs_WT_Light_WCL_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/ADIPO_ASC_TLR10LOV_vs_WT_Light_WCL_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "ADIPO_ASC_TLR10LOV_vs_WT_Light_WCL_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -1780,10 +1781,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/ADIPO_ASC_Interaction_WCL_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "ADIPO_ASC_Interaction_WCL_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/ADIPO_ASC_Interaction_WCL_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "ADIPO_ASC_Interaction_WCL_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -1984,10 +1985,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/OSTEO_ASC_WT_Light_vs_Dark_SN_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "OSTEO_ASC_WT_Light_vs_Dark_SN_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/OSTEO_ASC_WT_Light_vs_Dark_SN_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "OSTEO_ASC_WT_Light_vs_Dark_SN_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -2042,10 +2043,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/OSTEO_ASC_TLR10LOV_Light_vs_Dark_SN_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "OSTEO_ASC_TLR10LOV_Light_vs_Dark_SN_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/OSTEO_ASC_TLR10LOV_Light_vs_Dark_SN_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "OSTEO_ASC_TLR10LOV_Light_vs_Dark_SN_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -2100,10 +2101,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/OSTEO_ASC_TLR10LOV_vs_WT_Dark_SN_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "OSTEO_ASC_TLR10LOV_vs_WT_Dark_SN_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/OSTEO_ASC_TLR10LOV_vs_WT_Dark_SN_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "OSTEO_ASC_TLR10LOV_vs_WT_Dark_SN_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -2158,10 +2159,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/OSTEO_ASC_TLR10LOV_vs_WT_Light_SN_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "OSTEO_ASC_TLR10LOV_vs_WT_Light_SN_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/OSTEO_ASC_TLR10LOV_vs_WT_Light_SN_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "OSTEO_ASC_TLR10LOV_vs_WT_Light_SN_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -2215,10 +2216,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/OSTEO_ASC_Interaction_SN_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "OSTEO_ASC_Interaction_SN_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/OSTEO_ASC_Interaction_SN_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "OSTEO_ASC_Interaction_SN_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -2416,10 +2417,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/OSTEO_ASC_WT_Light_vs_Dark_WCL_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "OSTEO_ASC_WT_Light_vs_Dark_WCL_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/OSTEO_ASC_WT_Light_vs_Dark_WCL_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "OSTEO_ASC_WT_Light_vs_Dark_WCL_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -2474,10 +2475,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/OSTEO_ASC_TLR10LOV_Light_vs_Dark_WCL_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "OSTEO_ASC_TLR10LOV_Light_vs_Dark_WCL_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/OSTEO_ASC_TLR10LOV_Light_vs_Dark_WCL_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "OSTEO_ASC_TLR10LOV_Light_vs_Dark_WCL_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -2532,10 +2533,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/OSTEO_ASC_TLR10LOV_vs_WT_Dark_WCL_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "OSTEO_ASC_TLR10LOV_vs_WT_Dark_WCL_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/OSTEO_ASC_TLR10LOV_vs_WT_Dark_WCL_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "OSTEO_ASC_TLR10LOV_vs_WT_Dark_WCL_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -2590,10 +2591,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/OSTEO_ASC_TLR10LOV_vs_WT_Light_WCL_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "OSTEO_ASC_TLR10LOV_vs_WT_Light_WCL_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/OSTEO_ASC_TLR10LOV_vs_WT_Light_WCL_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "OSTEO_ASC_TLR10LOV_vs_WT_Light_WCL_filtered.csv"),
           row.names = FALSE)
 
 ```
@@ -2647,10 +2648,10 @@ data.sig.df <- assay(data.sig, "MS2") %>% as.data.frame()
   
 print(paste("Found", nrow(data.sig.df), "differentially expressed proteins."))
 
-write.csv(res, file = "results/DEA/OSTEO_ASC_Interaction_WCL_unfiltered.csv",
+write.csv(res, file = file.path(results_dir, "OSTEO_ASC_Interaction_WCL_unfiltered.csv"),
           row.names = FALSE)
 
-write.csv(res.sig, file = "results/DEA/OSTEO_ASC_Interaction_WCL_filtered.csv",
+write.csv(res.sig, file = file.path(results_dir, "OSTEO_ASC_Interaction_WCL_filtered.csv"),
           row.names = FALSE)
 
 ```

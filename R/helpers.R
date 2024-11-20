@@ -174,7 +174,7 @@ filter_too_many_missing <- function(MS1.df, MS2.df, full.groups = 1) {
 
 #' Plot Intensity Boxplot
 #'
-#' This function creates boxplots of log2 intensities for MS1 and MS2 data frames.
+#' This function creates boxplots to check the distribution of (log2) intensities and evaluate the need for normalization.
 #'
 #' @param MS1.df A data frame containing MS1 quantification data.
 #' @param MS2.df A data frame containing MS2 quantification data.
@@ -214,7 +214,7 @@ plot_intensity_boxplot <- function(MS1.df, MS2.df) {
 #' Get MNAR Genes
 #'
 #' This function identifies genes that are missing not at random (MNAR) in the data frame. 
-#' It does this by checking if a gene/protein is not found in all replicates of a sample.
+#' It does this by checking if a gene/protein is missing from all replicates of a sample.
 #'
 #' @param df A data frame containing quantification data.
 #' @return A logical vector indicating whether each gene is MNAR.
@@ -245,7 +245,7 @@ get_MNAR <- function(df) {
 
 #' Plot Missing Values Heatmap
 #'
-#' This function creates a heatmap showing the missing values in MS1 and MS2 data frames.
+#' This function creates a heatmap showing the missing values in MS1 and MS2 quantification data.
 #'
 #' @param MS1.df A data frame containing MS1 quantification data.
 #' @param MS2.df A data frame containing MS2 quantification data.
@@ -317,7 +317,7 @@ plot_missing_heatmap <- function(MS1.df, MS2.df, mnar, samples, colors_rows = NU
 
 #' Plot Missing Values Density
 #'
-#' This function creates density plots showing the distribution of missing values in MS1 and MS2 data frames.
+#' This function creates density plots showing the distribution of missing values in MS1 and MS2.
 #'
 #' @param MS1.df A data frame containing MS1 quantification data.
 #' @param MS2.df A data frame containing MS2 quantification data.
